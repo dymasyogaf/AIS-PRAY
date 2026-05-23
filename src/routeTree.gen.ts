@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSantriRouteImport } from './routes/_app.santri'
@@ -16,6 +17,11 @@ import { Route as AppRekapRouteImport } from './routes/_app.rekap'
 import { Route as AppRankingRouteImport } from './routes/_app.ranking'
 import { Route as AppInputRouteImport } from './routes/_app.input'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -48,12 +54,14 @@ const AppInputRoute = AppInputRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/login': typeof LoginRoute
   '/input': typeof AppInputRoute
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
   '/santri': typeof AppSantriRoute
 }
 export interface FileRoutesByTo {
+  '/login': typeof LoginRoute
   '/input': typeof AppInputRoute
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
@@ -63,6 +71,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
   '/_app/input': typeof AppInputRoute
   '/_app/ranking': typeof AppRankingRoute
   '/_app/rekap': typeof AppRekapRoute
@@ -71,12 +80,13 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/input' | '/ranking' | '/rekap' | '/santri'
+  fullPaths: '/' | '/login' | '/input' | '/ranking' | '/rekap' | '/santri'
   fileRoutesByTo: FileRoutesByTo
-  to: '/input' | '/ranking' | '/rekap' | '/santri' | '/'
+  to: '/login' | '/input' | '/ranking' | '/rekap' | '/santri' | '/'
   id:
     | '__root__'
     | '/_app'
+    | '/login'
     | '/_app/input'
     | '/_app/ranking'
     | '/_app/rekap'
@@ -86,10 +96,18 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
@@ -155,7 +173,18 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -1,143 +1,159 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useStore, scoreEntry, lastNDates } from "@/lib/ibadah-store";
-import { Trophy, Medal, Award } from "lucide-react";
+import { Award, Medal, Trophy } from "lucide-react";
+import { RoleGuard } from "@/components/RoleGuard";
+import { lastNDates, scoreEntry, useStore } from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/ranking")({
   component: RankingPage,
-  head: () => ({ meta: [{ title: "Ranking — Rekap Santri" }] }),
+  head: () => ({ meta: [{ title: "Ranking - Rekap Santri" }] }),
 });
 
 function RankingPage() {
-  const santri = useStore((s) => s.santri);
-  const entries = useStore((s) => s.entries);
-  const activeId = useStore((s) => s.activeSantriId);
+  const santri = useStore((store) => store.santri);
+  const entries = useStore((store) => store.entries);
+  const activeId = useStore((store) => store.activeSantriId);
   const [range, setRange] = useState<7 | 30>(30);
   const [asrama, setAsrama] = useState<string>("all");
 
-  const asramaList = Array.from(new Set(santri.map((s) => s.asrama)));
+  const asramaList = Array.from(new Set(santri.map((item) => item.asrama)));
 
   const ranking = useMemo(() => {
     const dates = new Set(lastNDates(range));
-    const rows = santri
-      .filter((s) => asrama === "all" || s.asrama === asrama)
-      .map((s) => {
-        const ents = entries.filter((e) => e.santriId === s.id && dates.has(e.date));
-        const scores = ents.map((e) => scoreEntry(e).total);
-        const total = scores.reduce((a, b) => a + b, 0);
+
+    return santri
+      .filter((item) => asrama === "all" || item.asrama === asrama)
+      .map((item) => {
+        const scores = entries
+          .filter((entry) => entry.santriId === item.id && dates.has(entry.date))
+          .map((entry) => scoreEntry(entry).total);
+
+        const total = scores.reduce((sum, value) => sum + value, 0);
         const avg = scores.length ? total / scores.length : 0;
-        return { ...s, total, avg: Math.round(avg), count: scores.length };
+
+        return { ...item, total, avg: Math.round(avg), count: scores.length };
       })
-      .sort((a, b) => b.avg - a.avg);
-    return rows;
-  }, [santri, entries, range, asrama]);
+      .sort((left, right) => right.avg - left.avg);
+  }, [asrama, entries, range, santri]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Ranking Santri</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Diurutkan berdasarkan rata-rata skor harian
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={asrama}
-            onChange={(e) => setAsrama(e.target.value)}
-            className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
-          >
-            <option value="all">Semua Asrama</option>
-            {asramaList.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <div className="inline-flex rounded-lg border border-border bg-card p-1">
-            {[7, 30].map((n) => (
-              <button
-                key={n}
-                onClick={() => setRange(n as 7 | 30)}
-                className={
-                  "px-3 py-1 text-xs font-medium rounded-md transition-colors " +
-                  (range === n ? "bg-primary text-primary-foreground" : "text-muted-foreground")
-                }
-              >
-                {n === 7 ? "Mingguan" : "Bulanan"}
-              </button>
-            ))}
+    <RoleGuard allowedRoles={["musyrif"]}>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Ranking Santri</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Diurutkan berdasarkan rata-rata skor harian.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={asrama}
+              onChange={(event) => setAsrama(event.target.value)}
+              className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
+            >
+              <option value="all">Semua Asrama</option>
+              {asramaList.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+
+            <div className="inline-flex rounded-lg border border-border bg-card p-1">
+              {[7, 30].map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setRange(value as 7 | 30)}
+                  className={
+                    "rounded-md px-3 py-1 text-xs font-medium transition-colors " +
+                    (range === value
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground")
+                  }
+                >
+                  {value === 7 ? "Mingguan" : "Bulanan"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Podium */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        {[1, 0, 2].map((idx) => {
-          const r = ranking[idx];
-          if (!r) return <div key={idx} />;
-          const sizes = [0, "scale-110", 0];
-          const colors = [
-            "from-zinc-300 to-zinc-400",
-            "from-amber-300 to-amber-500",
-            "from-orange-300 to-orange-500",
-          ];
-          const Icon = idx === 0 ? Trophy : idx === 1 ? Medal : Award;
-          return (
-            <div
-              key={r.id}
-              className={`rounded-2xl border border-border bg-card p-4 text-center ${idx === 0 ? "scale-105" : ""}`}
-            >
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          {[1, 0, 2].map((index) => {
+            const item = ranking[index];
+            if (!item) return <div key={index} />;
+
+            const colors = [
+              "from-zinc-300 to-zinc-400",
+              "from-amber-300 to-amber-500",
+              "from-orange-300 to-orange-500",
+            ];
+            const Icon = index === 0 ? Trophy : index === 1 ? Medal : Award;
+
+            return (
               <div
-                className={`mx-auto h-12 w-12 rounded-full bg-gradient-to-br ${colors[idx]} flex items-center justify-center text-white`}
+                key={item.id}
+                className={`rounded-2xl border border-border bg-card p-4 text-center ${index === 0 ? "scale-105" : ""}`}
               >
-                <Icon className="h-6 w-6" />
+                <div
+                  className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${colors[index]} text-white`}
+                >
+                  <Icon className="h-6 w-6" />
+                </div>
+                <div className="mt-2 text-xs font-medium text-muted-foreground">#{index + 1}</div>
+                <div className="truncate text-sm font-semibold">{item.nama}</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">{item.avg}</div>
+                <div className="text-[11px] text-muted-foreground">{item.asrama}</div>
               </div>
-              <div className="mt-2 text-xs font-medium text-muted-foreground">#{idx + 1}</div>
-              <div className="font-semibold text-sm truncate">{r.nama}</div>
-              <div className="text-2xl font-bold tabular-nums mt-1">{r.avg}</div>
-              <div className="text-[11px] text-muted-foreground">{r.asrama}</div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
 
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="text-left px-4 py-3 w-12">#</th>
-              <th className="text-left px-3 py-3">Nama</th>
-              <th className="text-left px-3 py-3 hidden sm:table-cell">Kelas</th>
-              <th className="text-left px-3 py-3 hidden md:table-cell">Asrama</th>
-              <th className="text-center px-3 py-3">Hari</th>
-              <th className="text-center px-3 py-3">Skor Rata²</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranking.map((r, i) => (
-              <tr
-                key={r.id}
-                className={
-                  "border-t border-border " + (r.id === activeId ? "bg-primary/5" : "")
-                }
-              >
-                <td className="px-4 py-3 font-semibold text-muted-foreground">{i + 1}</td>
-                <td className="px-3 py-3 font-medium">
-                  {r.nama}
-                  {r.id === activeId && (
-                    <span className="ml-2 text-[10px] font-semibold uppercase text-primary">Anda</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 hidden sm:table-cell text-muted-foreground">{r.kelas}</td>
-                <td className="px-3 py-3 hidden md:table-cell text-muted-foreground">{r.asrama}</td>
-                <td className="px-3 py-3 text-center text-muted-foreground">{r.count}</td>
-                <td className="px-3 py-3 text-center font-bold tabular-nums">{r.avg}</td>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="w-12 px-4 py-3 text-left">#</th>
+                <th className="px-3 py-3 text-left">Nama</th>
+                <th className="hidden px-3 py-3 text-left sm:table-cell">Kelas</th>
+                <th className="hidden px-3 py-3 text-left md:table-cell">Asrama</th>
+                <th className="px-3 py-3 text-center">Hari</th>
+                <th className="px-3 py-3 text-center">Skor Rata-rata</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ranking.map((item, index) => (
+                <tr
+                  key={item.id}
+                  className={
+                    "border-t border-border " + (item.id === activeId ? "bg-primary/5" : "")
+                  }
+                >
+                  <td className="px-4 py-3 font-semibold text-muted-foreground">{index + 1}</td>
+                  <td className="px-3 py-3 font-medium">
+                    {item.nama}
+                    {item.id === activeId ? (
+                      <span className="ml-2 text-[10px] font-semibold uppercase text-primary">
+                        Aktif
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
+                    {item.kelas}
+                  </td>
+                  <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
+                    {item.asrama}
+                  </td>
+                  <td className="px-3 py-3 text-center text-muted-foreground">{item.count}</td>
+                  <td className="px-3 py-3 text-center font-bold tabular-nums">{item.avg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </RoleGuard>
   );
 }

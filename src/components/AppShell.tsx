@@ -20,7 +20,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { logout, type UserRole, useAuth } from "@/lib/auth-store";
+import {
+  filterSantriForRole,
+  isSupervisorRole,
+  logout,
+  roleLabel,
+  type UserRole,
+  useAuth,
+} from "@/lib/auth-store";
 import { setActiveSantri, useStore } from "@/lib/ibadah-store";
 import { cn } from "@/lib/utils";
 
@@ -30,42 +37,42 @@ const nav = [
     label: "Dashboard",
     mobileLabel: "Dashboard",
     icon: LayoutDashboard,
-    roles: ["musyrif", "santri"] as UserRole[],
+    roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
   },
   {
     to: "/input",
     label: "Input Ibadah",
     mobileLabel: "Input",
     icon: PencilLine,
-    roles: ["santri"] as UserRole[],
+    roles: ["santri", "santriwati"] as UserRole[],
   },
   {
     to: "/rekap",
     label: "Rekap",
     mobileLabel: "Rekap",
     icon: BarChart3,
-    roles: ["musyrif", "santri"] as UserRole[],
+    roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
   },
   {
     to: "/ranking",
     label: "Ranking",
     mobileLabel: "Ranking",
     icon: Trophy,
-    roles: ["musyrif"] as UserRole[],
+    roles: ["musyrif", "musyrifah"] as UserRole[],
   },
   {
     to: "/santri",
     label: "Daftar Santri",
     mobileLabel: "Santri",
     icon: Users,
-    roles: ["musyrif"] as UserRole[],
+    roles: ["musyrif", "musyrifah"] as UserRole[],
   },
   {
     to: "/butuh-pembinaan",
     label: "Butuh Pembinaan",
     mobileLabel: "Pembinaan",
     icon: Flame,
-    roles: ["musyrif"] as UserRole[],
+    roles: ["musyrif", "musyrifah"] as UserRole[],
   },
 ];
 
@@ -73,14 +80,17 @@ export function AppShell() {
   const location = useLocation();
   const { session } = useAuth();
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
-  const santri = useStore((store) => store.santri);
+  const allSantri = useStore((store) => store.santri);
   const activeId = useStore((store) => store.activeSantriId);
-  const active = santri.find((item) => item.id === activeId);
 
   if (!session) return null;
 
+  const santri = isSupervisorRole(session.role)
+    ? filterSantriForRole(session.role, allSantri)
+    : allSantri.filter((item) => item.id === session.santriId);
+  const active = santri.find((item) => item.id === activeId);
   const visibleNav = nav.filter((item) => item.roles.includes(session.role));
-  const canSwitchSantri = session.role === "musyrif";
+  const canSwitchSantri = isSupervisorRole(session.role);
   const handleLogout = () => logout();
 
   return (
@@ -129,7 +139,7 @@ export function AppShell() {
               <div className="text-xs text-muted-foreground">Login sebagai</div>
               <div className="mt-1 text-sm font-semibold">{session.displayName}</div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                {session.role}
+                {roleLabel(session.role)}
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { RoleGuard } from "@/components/RoleGuard";
+import { filterSantriForRole, useAuth } from "@/lib/auth-store";
 import { lastNDates, scoreEntry, setActiveSantri, statusOf, useStore } from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/santri")({
@@ -9,18 +10,21 @@ export const Route = createFileRoute("/_app/santri")({
 });
 
 function SantriPage() {
-  const santri = useStore((store) => store.santri);
+  const { session } = useAuth();
+  const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const activeId = useStore((store) => store.activeSantriId);
   const dates = new Set(lastNDates(7));
+  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santriLabel = santri[0]?.gender === "putri" ? "Santriwati" : "Santri";
 
   return (
-    <RoleGuard allowedRoles={["musyrif"]}>
+    <RoleGuard allowedRoles={["musyrif", "musyrifah"]}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daftar Santri</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daftar {santriLabel}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pilih santri untuk melihat ringkasan dan rekap ibadahnya.
+            Pilih {santriLabel.toLowerCase()} untuk melihat ringkasan dan rekap ibadahnya.
           </p>
         </div>
 

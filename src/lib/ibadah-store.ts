@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 export type SholatStatus = "ontime" | "late" | "miss";
 export const SHOLAT_KEYS = ["subuh", "dzuhur", "ashar", "maghrib", "isya"] as const;
 export type SholatKey = (typeof SHOLAT_KEYS)[number];
+export type SantriGender = "putra" | "putri";
+export type SupervisorRole = "musyrif" | "musyrifah";
 
 export interface IbadahEntry {
   date: string;
@@ -23,6 +25,9 @@ export interface Santri {
   nama: string;
   kelas: string;
   asrama: string;
+  gender: SantriGender;
+  supervisorRole: SupervisorRole;
+  profileType?: "default" | "dummy";
 }
 
 export interface PembinaanFollowUp {
@@ -48,15 +53,43 @@ interface Store {
 }
 
 const DEFAULT_SANTRI: Santri[] = [
-  { id: "s1", nama: "Ahmad Faiz Rahman", kelas: "X-A", asrama: "Al-Furqan" },
-  { id: "s2", nama: "Muhammad Hafidz", kelas: "X-A", asrama: "Al-Furqan" },
-  { id: "s3", nama: "Yusuf Abdurrahman", kelas: "X-B", asrama: "Al-Hikmah" },
-  { id: "s4", nama: "Bilal Ar-Rasyid", kelas: "XI-A", asrama: "Al-Furqan" },
-  { id: "s5", nama: "Umar Khalifah", kelas: "XI-A", asrama: "Al-Hikmah" },
-  { id: "s6", nama: "Zaid bin Tsabit", kelas: "XI-B", asrama: "Al-Furqan" },
-  { id: "s7", nama: "Abdullah Mubarak", kelas: "XII-A", asrama: "Al-Hikmah" },
-  { id: "s8", nama: "Salman Al-Farisi", kelas: "XII-A", asrama: "Al-Furqan" },
-];
+  { id: "s1", nama: "Ahmad Faiz Rahman", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
+  { id: "s2", nama: "Muhammad Hafidz", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
+  { id: "s3", nama: "Yusuf Abdurrahman", kelas: "X-B", asrama: "Al-Hikmah", gender: "putra" },
+  { id: "s4", nama: "Bilal Ar-Rasyid", kelas: "XI-A", asrama: "Al-Furqan", gender: "putra" },
+  { id: "s5", nama: "Aisyah Zahra", kelas: "X-A", asrama: "An-Nisa", gender: "putri" },
+  { id: "s6", nama: "Khadijah Humaira", kelas: "X-B", asrama: "An-Nisa", gender: "putri" },
+  { id: "s7", nama: "Maryam Safitri", kelas: "XI-A", asrama: "Al-Hikmah Putri", gender: "putri" },
+  { id: "s8", nama: "Safiyya Nabila", kelas: "XII-A", asrama: "Al-Hikmah Putri", gender: "putri" },
+].map((item) => ({
+  ...item,
+  supervisorRole: item.gender === "putra" ? "musyrif" : "musyrifah",
+  profileType: "default" as const,
+}));
+
+function normalizeSantri(
+  input: Array<
+    Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
+      gender?: SantriGender;
+      supervisorRole?: SupervisorRole;
+      profileType?: "default" | "dummy";
+    }
+  >,
+) {
+  return input.map((item) => {
+    const fallback = DEFAULT_SANTRI.find((santri) => santri.id === item.id);
+    const gender = item.gender ?? fallback?.gender ?? "putra";
+    return {
+      ...item,
+      gender,
+      supervisorRole:
+        item.supervisorRole ??
+        fallback?.supervisorRole ??
+        (gender === "putra" ? "musyrif" : "musyrifah"),
+      profileType: item.profileType ?? fallback?.profileType ?? "default",
+    };
+  });
+}
 
 let store: Store = { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
 let initialized = false;
@@ -100,7 +133,16 @@ function readSantri() {
   if (typeof window === "undefined") return DEFAULT_SANTRI;
   try {
     const raw = readSantriRaw();
-    if (raw) return JSON.parse(raw) as Santri[];
+    if (raw)
+      return normalizeSantri(
+        JSON.parse(raw) as Array<
+          Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
+            gender?: SantriGender;
+            supervisorRole?: SupervisorRole;
+            profileType?: "default" | "dummy";
+          }
+        >,
+      );
     localStorage.setItem(SANTRI_KEY, JSON.stringify(DEFAULT_SANTRI));
     return DEFAULT_SANTRI;
   } catch {
@@ -189,7 +231,15 @@ function refreshSharedState() {
   store = {
     entries: JSON.parse(nextSnapshot.entriesRaw || "[]") as IbadahEntry[],
     santri: nextSnapshot.santriRaw
-      ? (JSON.parse(nextSnapshot.santriRaw) as Santri[])
+      ? normalizeSantri(
+          JSON.parse(nextSnapshot.santriRaw) as Array<
+            Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
+              gender?: SantriGender;
+              supervisorRole?: SupervisorRole;
+              profileType?: "default" | "dummy";
+            }
+          >,
+        )
       : DEFAULT_SANTRI,
     activeSantriId: nextSnapshot.activeSantriId,
     pembinaan: JSON.parse(nextSnapshot.pembinaanRaw || "{}") as Record<string, PembinaanFollowUp>,
@@ -364,7 +414,7 @@ export function updatePembinaanFollowUp(
     ...next,
     selesai,
     updatedAt: now,
-    selesaiAt: selesai ? current.selesaiAt ?? now : null,
+    selesaiAt: selesai ? (current.selesaiAt ?? now) : null,
   };
 
   store = {
@@ -377,6 +427,46 @@ export function updatePembinaanFollowUp(
   persist();
   emit();
   broadcastSync();
+}
+
+export function createDummySantriProfile(input: {
+  nama: string;
+  gender: SantriGender;
+  supervisorRole: SupervisorRole;
+  kelas: string;
+}) {
+  ensureInit();
+
+  const nextId = `s${Date.now()}`;
+  const profile: Santri = {
+    id: nextId,
+    nama: input.nama.trim(),
+    gender: input.gender,
+    kelas: input.kelas,
+    asrama: input.gender === "putra" ? "Binaan Musyrif" : "Binaan Musyrifah",
+    supervisorRole: input.supervisorRole,
+    profileType: "dummy",
+  };
+
+  store = {
+    ...store,
+    santri: [...store.santri, profile],
+  };
+  persist();
+  emit();
+  broadcastSync();
+
+  return profile;
+}
+
+export function getSantriList() {
+  ensureInit();
+  return store.santri;
+}
+
+export function getActiveSantriIdValue() {
+  ensureInit();
+  return store.activeSantriId;
 }
 
 export function getEntry(date: string, santriId: string): IbadahEntry | undefined {

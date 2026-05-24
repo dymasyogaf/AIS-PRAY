@@ -2,7 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ClipboardList, RotateCcw } from "lucide-react";
 import { RoleGuard } from "@/components/RoleGuard";
-import { setActiveSantri, updatePembinaanFollowUp, useStore, getPembinaanStreak } from "@/lib/ibadah-store";
+import { filterSantriForRole, useAuth } from "@/lib/auth-store";
+import {
+  setActiveSantri,
+  updatePembinaanFollowUp,
+  useStore,
+  getPembinaanStreak,
+} from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/butuh-pembinaan")({
   component: ButuhPembinaanPage,
@@ -10,10 +16,13 @@ export const Route = createFileRoute("/_app/butuh-pembinaan")({
 });
 
 function ButuhPembinaanPage() {
-  const santri = useStore((store) => store.santri);
+  const { session } = useAuth();
+  const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const pembinaan = useStore((store) => store.pembinaan);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
 
   const pembinaanList = useMemo(
     () =>
@@ -57,12 +66,12 @@ function ButuhPembinaanPage() {
   const belumCount = pembinaanList.length - selesaiCount;
 
   return (
-    <RoleGuard allowedRoles={["musyrif"]}>
+    <RoleGuard allowedRoles={["musyrif", "musyrifah"]}>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Butuh Pembinaan</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pantau santri yang sedang perlu pembinaan 3 kali berturut-turut dan tandai tindak
+            Pantau {santriLabel} yang sedang perlu pembinaan 3 kali berturut-turut dan tandai tindak
             lanjutnya.
           </p>
         </div>
@@ -195,7 +204,9 @@ function ButuhPembinaanPage() {
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-border bg-card px-5 py-10 text-center">
-            <div className="text-base font-semibold">Belum ada santri yang butuh pembinaan</div>
+            <div className="text-base font-semibold">
+              Belum ada {santriLabel} yang butuh pembinaan
+            </div>
             <div className="mt-1 text-sm text-muted-foreground">
               Daftar ini akan terisi otomatis saat ada santri dengan status perlu pembinaan 3 kali
               berturut-turut.

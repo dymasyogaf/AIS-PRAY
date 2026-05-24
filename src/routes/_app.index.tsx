@@ -22,7 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useAuth } from "@/lib/auth-store";
+import { filterSantriForRole, isSupervisorRole, roleLabel, useAuth } from "@/lib/auth-store";
 import {
   getPembinaanStreak,
   SHOLAT_KEYS,
@@ -48,14 +48,30 @@ export const Route = createFileRoute("/_app/")({
 function Dashboard() {
   const { session } = useAuth();
 
-  if (session?.role === "musyrif") {
+  if (session && isSupervisorRole(session.role)) {
     return <MusyrifDashboard />;
   }
 
   return <SantriDashboard />;
 }
 
+function dashboardGreeting(
+  role: NonNullable<ReturnType<typeof useAuth>["session"]>["role"],
+  name: string,
+) {
+  if (role === "musyrifah") {
+    return `Assalamualaikum ustadzah ${name}, semoga harimu menyenangkan:)`;
+  }
+
+  if (role === "musyrif") {
+    return `Assalamualaikum ustadz ${name}, semoga harimu menyenangkan`;
+  }
+
+  return `Assalamualaikum ${name}, ayo konsisten jadi lebih baik untuk setiap hari!`;
+}
+
 function SantriDashboard() {
+  const { session } = useAuth();
   const activeId = useStore((store) => store.activeSantriId);
   const santri = useStore((store) => store.santri.find((item) => item.id === activeId));
   const entries = useStore((store) => store.entries);
@@ -125,7 +141,7 @@ function SantriDashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Assalamu'alaikum, {santri?.nama.split(" ")[0]}
+            {session ? dashboardGreeting(session.role, session.displayName) : santri?.nama}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {new Date().toLocaleDateString("id-ID", {
@@ -251,9 +267,12 @@ function SantriDashboard() {
 }
 
 function MusyrifDashboard() {
-  const santri = useStore((store) => store.santri);
+  const { session } = useAuth();
+  const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const today = todayString();
+  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
 
   const todayScores = useMemo(
     () =>
@@ -324,9 +343,11 @@ function MusyrifDashboard() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard Musyrif</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {session ? dashboardGreeting(session.role, session.displayName) : "Dashboard Pembina"}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ringkasan kondisi seluruh santri hari ini.
+            Ringkasan kondisi seluruh {santriLabel} binaan hari ini.
           </p>
         </div>
       </div>
@@ -342,8 +363,8 @@ function MusyrifDashboard() {
               Pantau skor ibadah, kedisiplinan, dan santri yang perlu perhatian.
             </h2>
             <p className="mt-3 max-w-2xl text-sm opacity-90">
-              Data di bawah mengambil seluruh input santri dan menampilkan rata-rata harian serta
-              santri terbaik 7 hari terakhir.
+              Data di bawah mengambil seluruh input {santriLabel} binaan dan menampilkan rata-rata
+              harian serta peringkat terbaik 7 hari terakhir.
             </p>
           </div>
 
@@ -388,7 +409,7 @@ function MusyrifDashboard() {
         <div className="rounded-2xl border border-border bg-card p-5 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-semibold">Tren Rata-rata 14 Hari</h3>
-            <span className="text-xs text-muted-foreground">Semua santri</span>
+            <span className="text-xs text-muted-foreground">Semua {santriLabel}</span>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -410,7 +431,7 @@ function MusyrifDashboard() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-4 font-semibold">Top 5 Santri Minggu Ini</h3>
+          <h3 className="mb-4 font-semibold">Top 5 {santriLabel} Minggu Ini</h3>
           <div className="space-y-3">
             {topSantri.map((item, index) => (
               <div
@@ -436,7 +457,7 @@ function MusyrifDashboard() {
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border p-5">
-          <h3 className="font-semibold">Skor Hari Ini per Santri</h3>
+          <h3 className="font-semibold">Skor Hari Ini per {santriLabel}</h3>
           <span className="text-xs text-muted-foreground">{today}</span>
         </div>
         <div className="overflow-x-auto">
@@ -493,15 +514,7 @@ function ActivityRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HeroStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function HeroStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   const className = "rounded-2xl bg-white/15 px-4 py-4 text-left backdrop-blur";
 
   const content = (

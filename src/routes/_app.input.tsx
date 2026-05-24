@@ -54,13 +54,13 @@ function InputPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["santri"]}>
+    <RoleGuard allowedRoles={["santri", "santriwati"]}>
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Input Ibadah Harian</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Catat ibadah harian untuk kebutuhan pemantauan musyrif.
+              Catat ibadah harian untuk kebutuhan pemantauan pembina.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ function InputPage() {
           <h3 className="font-semibold">Panduan Pengisian</h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Isikan aktivitas ibadah dengan jujur. Penilaian skor dan status hanya ditampilkan di
-            akun musyrif.
+            akun pembina.
           </p>
         </div>
 

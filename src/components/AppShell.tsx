@@ -1,5 +1,25 @@
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
-import { BarChart3, LayoutDashboard, LogOut, Moon, PencilLine, Trophy, Users } from "lucide-react";
+import { useState } from "react";
+import {
+  BarChart3,
+  Flame,
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  PencilLine,
+  Trophy,
+  Users,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { logout, type UserRole, useAuth } from "@/lib/auth-store";
 import { setActiveSantri, useStore } from "@/lib/ibadah-store";
 import { cn } from "@/lib/utils";
@@ -40,11 +60,19 @@ const nav = [
     icon: Users,
     roles: ["musyrif"] as UserRole[],
   },
+  {
+    to: "/butuh-pembinaan",
+    label: "Butuh Pembinaan",
+    mobileLabel: "Pembinaan",
+    icon: Flame,
+    roles: ["musyrif"] as UserRole[],
+  },
 ];
 
 export function AppShell() {
   const location = useLocation();
   const { session } = useAuth();
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const santri = useStore((store) => store.santri);
   const activeId = useStore((store) => store.activeSantriId);
   const active = santri.find((item) => item.id === activeId);
@@ -53,11 +81,7 @@ export function AppShell() {
 
   const visibleNav = nav.filter((item) => item.roles.includes(session.role));
   const canSwitchSantri = session.role === "musyrif";
-  const handleLogout = () => {
-    if (window.confirm("Yakin mau keluar?")) {
-      logout();
-    }
-  };
+  const handleLogout = () => logout();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -139,7 +163,7 @@ export function AppShell() {
             ) : null}
 
             <button
-              onClick={handleLogout}
+              onClick={() => setIsLogoutOpen(true)}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
             >
               <LogOut className="h-4 w-4" />
@@ -178,7 +202,7 @@ export function AppShell() {
           )}
 
           <button
-            onClick={handleLogout}
+            onClick={() => setIsLogoutOpen(true)}
             className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium"
           >
             Keluar
@@ -217,6 +241,26 @@ export function AppShell() {
         </nav>
         <div className="h-16 lg:hidden" />
       </main>
+
+      <AlertDialog open={isLogoutOpen} onOpenChange={setIsLogoutOpen}>
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Keluar dari akun?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anda akan keluar dari sesi saat ini dan perlu login lagi untuk mengakses dashboard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLogout}
+              className="bg-primary text-primary-foreground hover:opacity-90"
+            >
+              Ya, keluar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

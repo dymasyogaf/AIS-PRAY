@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/lib/auth-store";
 import {
+  getPembinaanStreak,
   SHOLAT_KEYS,
   emptyEntry,
   getEntry,
@@ -268,8 +269,19 @@ function MusyrifDashboard() {
     todayScores.reduce((total, item) => total + item.total, 0) / Math.max(1, todayScores.length),
   );
   const rajinCount = todayScores.filter((item) => item.total >= 80).length;
-  const pembinaanCount = todayScores.filter((item) => item.total > 0 && item.total < 60).length;
   const inputToday = todayScores.filter((item) => item.total > 0).length;
+  const pembinaanSantri = useMemo(
+    () =>
+      santri
+        .map((item) => ({ ...item, pembinaanStreak: getPembinaanStreak(entries, item.id) }))
+        .filter((item) => item.pembinaanStreak >= 3)
+        .sort(
+          (left, right) =>
+            right.pembinaanStreak - left.pembinaanStreak || left.nama.localeCompare(right.nama),
+        ),
+    [entries, santri],
+  );
+  const pembinaanCount = pembinaanSantri.length;
 
   const trend = useMemo(
     () =>
@@ -339,7 +351,11 @@ function MusyrifDashboard() {
             <HeroStat label="Total Santri" value={`${santri.length}`} />
             <HeroStat label="Rata-rata Hari Ini" value={`${avgToday}`} />
             <HeroStat label="Input Masuk" value={`${inputToday}/${santri.length}`} />
-            <HeroStat label="Perlu Pembinaan" value={`${pembinaanCount}`} />
+            <HeroStat
+              label="Perlu Pembinaan"
+              value={`${pembinaanCount}`}
+              hint="3 kali berturut-turut"
+            />
           </div>
         </div>
       </div>
@@ -364,6 +380,7 @@ function MusyrifDashboard() {
           icon={<Flame className="h-4 w-4" />}
           label="Butuh Pembinaan"
           value={`${pembinaanCount}`}
+          hint="3 kali berturut-turut"
         />
       </div>
 
@@ -476,23 +493,65 @@ function ActivityRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-white/15 px-4 py-4 backdrop-blur">
+function HeroStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  const className = "rounded-2xl bg-white/15 px-4 py-4 text-left backdrop-blur";
+
+  const content = (
+    <>
       <div className="text-xs uppercase tracking-wide opacity-80">{label}</div>
       <div className="mt-2 text-3xl font-bold tabular-nums">{value}</div>
-    </div>
+      {hint ? <div className="mt-1 text-xs opacity-80">{hint}</div> : null}
+    </>
   );
+
+  return <div className={className}>{content}</div>;
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  onClick?: () => void;
+}) {
+  const className = `w-full rounded-2xl border border-border bg-card p-4 text-left ${
+    onClick
+      ? "cursor-pointer transition hover:border-primary/40 hover:bg-secondary/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+      : ""
+  }`;
+
+  const content = (
+    <>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {icon}
         <span>{label}</span>
       </div>
       <div className="mt-2 text-2xl font-bold tabular-nums">{value}</div>
-    </div>
+      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }

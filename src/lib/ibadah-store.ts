@@ -25,15 +25,26 @@ export interface Santri {
   asrama: string;
 }
 
+export interface PembinaanFollowUp {
+  santriId: string;
+  catatan: string;
+  selesai: boolean;
+  updatedAt: string | null;
+  selesaiAt: string | null;
+}
+
 const STORAGE_KEY = "ibadah-data-v1";
 const SANTRI_KEY = "santri-data-v1";
 const ACTIVE_KEY = "active-santri-v1";
 const SYNC_CHANNEL = "ibadah-sync-v1";
+const PEMBINAAN_KEY = "pembinaan-data-v1";
+const SYNC_POLL_MS = 1000;
 
 interface Store {
   entries: IbadahEntry[];
   santri: Santri[];
   activeSantriId: string;
+  pembinaan: Record<string, PembinaanFollowUp>;
 }
 
 const DEFAULT_SANTRI: Santri[] = [
@@ -47,11 +58,16 @@ const DEFAULT_SANTRI: Santri[] = [
   { id: "s8", nama: "Salman Al-Farisi", kelas: "XII-A", asrama: "Al-Furqan" },
 ];
 
-let store: Store = { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1" };
+let store: Store = { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
 let initialized = false;
 let syncBound = false;
 let syncChannel: BroadcastChannel | null = null;
+let syncInterval: number | null = null;
 const listeners = new Set<() => void>();
+let lastEntriesRaw = "";
+let lastSantriRaw = "";
+let lastActiveSantriId = "s1";
+let lastPembinaanRaw = "";
 
 function getActiveSantriId() {
   if (typeof window === "undefined") return "s1";
@@ -65,16 +81,25 @@ function getActiveSantriId() {
 function readEntries() {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as IbadahEntry[];
+    return JSON.parse(readEntriesRaw() || "[]") as IbadahEntry[];
   } catch {
     return [];
+  }
+}
+
+function readEntriesRaw() {
+  if (typeof window === "undefined") return "[]";
+  try {
+    return localStorage.getItem(STORAGE_KEY) || "[]";
+  } catch {
+    return "[]";
   }
 }
 
 function readSantri() {
   if (typeof window === "undefined") return DEFAULT_SANTRI;
   try {
-    const raw = localStorage.getItem(SANTRI_KEY);
+    const raw = readSantriRaw();
     if (raw) return JSON.parse(raw) as Santri[];
     localStorage.setItem(SANTRI_KEY, JSON.stringify(DEFAULT_SANTRI));
     return DEFAULT_SANTRI;
@@ -83,30 +108,99 @@ function readSantri() {
   }
 }
 
+function readPembinaan() {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(readPembinaanRaw() || "{}") as Record<string, PembinaanFollowUp>;
+  } catch {
+    return {};
+  }
+}
+
+function readSantriRaw() {
+  if (typeof window === "undefined") return JSON.stringify(DEFAULT_SANTRI);
+  try {
+    return localStorage.getItem(SANTRI_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function readPembinaanRaw() {
+  if (typeof window === "undefined") return "{}";
+  try {
+    return localStorage.getItem(PEMBINAAN_KEY) || "{}";
+  } catch {
+    return "{}";
+  }
+}
+
+function rememberSnapshot(
+  entriesRaw: string,
+  santriRaw: string,
+  activeSantriId: string,
+  pembinaanRaw: string,
+) {
+  lastEntriesRaw = entriesRaw;
+  lastSantriRaw = santriRaw;
+  lastActiveSantriId = activeSantriId;
+  lastPembinaanRaw = pembinaanRaw;
+}
+
+function getSnapshot() {
+  const entriesRaw = readEntriesRaw();
+  const santriRaw = readSantriRaw();
+  const activeSantriId = getActiveSantriId();
+  const pembinaanRaw = readPembinaanRaw();
+
+  return { entriesRaw, santriRaw, activeSantriId, pembinaanRaw };
+}
+
 function loadStore(): Store {
   if (typeof window === "undefined") {
-    return { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1" };
+    return { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
   }
 
   let entries = readEntries();
   const santri = readSantri();
   const activeSantriId = getActiveSantriId();
+  const pembinaan = readPembinaan();
 
   if (entries.length === 0) {
     entries = seedEntries(santri);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }
 
-  return { entries, santri, activeSantriId };
+  rememberSnapshot(readEntriesRaw(), readSantriRaw(), activeSantriId, readPembinaanRaw());
+  return { entries, santri, activeSantriId, pembinaan };
 }
 
 function refreshSharedState() {
   if (typeof window === "undefined") return;
+  const nextSnapshot = getSnapshot();
+  const hasChanged =
+    nextSnapshot.entriesRaw !== lastEntriesRaw ||
+    nextSnapshot.santriRaw !== lastSantriRaw ||
+    nextSnapshot.activeSantriId !== lastActiveSantriId ||
+    nextSnapshot.pembinaanRaw !== lastPembinaanRaw;
+
+  if (!hasChanged) return false;
+
   store = {
-    entries: readEntries(),
-    santri: readSantri(),
-    activeSantriId: getActiveSantriId(),
+    entries: JSON.parse(nextSnapshot.entriesRaw || "[]") as IbadahEntry[],
+    santri: nextSnapshot.santriRaw
+      ? (JSON.parse(nextSnapshot.santriRaw) as Santri[])
+      : DEFAULT_SANTRI,
+    activeSantriId: nextSnapshot.activeSantriId,
+    pembinaan: JSON.parse(nextSnapshot.pembinaanRaw || "{}") as Record<string, PembinaanFollowUp>,
   };
+  rememberSnapshot(
+    nextSnapshot.entriesRaw,
+    nextSnapshot.santriRaw,
+    nextSnapshot.activeSantriId,
+    nextSnapshot.pembinaanRaw,
+  );
+  return true;
 }
 
 function emit() {
@@ -121,12 +215,27 @@ function bindRealtimeSync() {
   if (syncBound || typeof window === "undefined") return;
 
   const handleSync = () => {
-    refreshSharedState();
-    emit();
+    if (refreshSharedState()) {
+      emit();
+    }
   };
 
   window.addEventListener("storage", (event) => {
-    if (!event.key || event.key === STORAGE_KEY || event.key === SANTRI_KEY) {
+    if (
+      !event.key ||
+      event.key === STORAGE_KEY ||
+      event.key === SANTRI_KEY ||
+      event.key === ACTIVE_KEY ||
+      event.key === PEMBINAAN_KEY
+    ) {
+      handleSync();
+    }
+  });
+
+  window.addEventListener("focus", handleSync);
+  window.addEventListener("pageshow", handleSync);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
       handleSync();
     }
   });
@@ -140,6 +249,8 @@ function bindRealtimeSync() {
     });
   }
 
+  // Fallback for tabs/browser contexts where storage or BroadcastChannel events are delayed.
+  syncInterval = window.setInterval(handleSync, SYNC_POLL_MS);
   syncBound = true;
 }
 
@@ -154,7 +265,9 @@ function ensureInit() {
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store.entries));
   localStorage.setItem(SANTRI_KEY, JSON.stringify(store.santri));
+  localStorage.setItem(PEMBINAAN_KEY, JSON.stringify(store.pembinaan));
   sessionStorage.setItem(ACTIVE_KEY, store.activeSantriId);
+  rememberSnapshot(readEntriesRaw(), readSantriRaw(), store.activeSantriId, readPembinaanRaw());
 }
 
 function subscribe(listener: () => void) {
@@ -229,6 +342,41 @@ export function setActiveSantri(id: string) {
   store = { ...store, activeSantriId: id };
   persist();
   emit();
+  broadcastSync();
+}
+
+export function updatePembinaanFollowUp(
+  santriId: string,
+  next: Partial<Pick<PembinaanFollowUp, "catatan" | "selesai">>,
+) {
+  ensureInit();
+  const current = store.pembinaan[santriId] ?? {
+    santriId,
+    catatan: "",
+    selesai: false,
+    updatedAt: null,
+    selesaiAt: null,
+  };
+  const now = new Date().toISOString();
+  const selesai = next.selesai ?? current.selesai;
+  const pembinaan: PembinaanFollowUp = {
+    ...current,
+    ...next,
+    selesai,
+    updatedAt: now,
+    selesaiAt: selesai ? current.selesaiAt ?? now : null,
+  };
+
+  store = {
+    ...store,
+    pembinaan: {
+      ...store.pembinaan,
+      [santriId]: pembinaan,
+    },
+  };
+  persist();
+  emit();
+  broadcastSync();
 }
 
 export function getEntry(date: string, santriId: string): IbadahEntry | undefined {
@@ -309,4 +457,19 @@ export function lastNDates(n: number): string[] {
   }
 
   return out;
+}
+
+export function getPembinaanStreak(entries: IbadahEntry[], santriId: string) {
+  const santriEntries = entries
+    .filter((entry) => entry.santriId === santriId)
+    .sort((left, right) => left.date.localeCompare(right.date));
+
+  let pembinaanStreak = 0;
+  for (let index = santriEntries.length - 1; index >= 0; index -= 1) {
+    const isPembinaan = statusOf(scoreEntry(santriEntries[index]).total).tone === "danger";
+    if (!isPembinaan) break;
+    pembinaanStreak += 1;
+  }
+
+  return pembinaanStreak;
 }

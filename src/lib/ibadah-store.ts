@@ -6,6 +6,12 @@ export type SholatKey = (typeof SHOLAT_KEYS)[number];
 export type SantriGender = "putra" | "putri";
 export type SupervisorRole = "musyrif" | "musyrifah";
 
+export interface SupervisorNote {
+  text: string;
+  updatedAt: string | null;
+  readAt: string | null;
+}
+
 export interface IbadahEntry {
   date: string;
   santriId: string;
@@ -18,6 +24,7 @@ export interface IbadahEntry {
   puasa: boolean;
   adab: number;
   catatan: string;
+  catatanPembina: SupervisorNote;
 }
 
 export interface Santri {
@@ -114,10 +121,49 @@ function getActiveSantriId() {
 function readEntries() {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(readEntriesRaw() || "[]") as IbadahEntry[];
+    return normalizeEntries(JSON.parse(readEntriesRaw() || "[]") as Partial<IbadahEntry>[]);
   } catch {
     return [];
   }
+}
+
+function normalizeEntries(input: Partial<IbadahEntry>[]) {
+  return input.map((entry) => ({
+    date: entry.date ?? "",
+    santriId: entry.santriId ?? "",
+    sholat: {
+      subuh: entry.sholat?.subuh ?? "miss",
+      dzuhur: entry.sholat?.dzuhur ?? "miss",
+      ashar: entry.sholat?.ashar ?? "miss",
+      maghrib: entry.sholat?.maghrib ?? "miss",
+      isya: entry.sholat?.isya ?? "miss",
+    },
+    tilawahMenit: entry.tilawahMenit ?? 0,
+    tilawahHalaman: entry.tilawahHalaman ?? 0,
+    tahfidzBaru: entry.tahfidzBaru ?? 0,
+    tahfidzMurajaah: entry.tahfidzMurajaah ?? 0,
+    qiyamRakaat: entry.qiyamRakaat ?? 0,
+    puasa: entry.puasa ?? false,
+    adab: entry.adab ?? 3,
+    catatan: entry.catatan ?? "",
+    catatanPembina: normalizeSupervisorNote(entry.catatanPembina),
+  }));
+}
+
+function normalizeSupervisorNote(input: Partial<SupervisorNote> | string | undefined) {
+  if (typeof input === "string") {
+    return {
+      text: input,
+      updatedAt: input.trim() ? new Date(0).toISOString() : null,
+      readAt: null,
+    } satisfies SupervisorNote;
+  }
+
+  return {
+    text: input?.text ?? "",
+    updatedAt: input?.updatedAt ?? null,
+    readAt: input?.readAt ?? null,
+  } satisfies SupervisorNote;
 }
 
 function readEntriesRaw() {
@@ -229,7 +275,7 @@ function refreshSharedState() {
   if (!hasChanged) return false;
 
   store = {
-    entries: JSON.parse(nextSnapshot.entriesRaw || "[]") as IbadahEntry[],
+    entries: normalizeEntries(JSON.parse(nextSnapshot.entriesRaw || "[]") as Partial<IbadahEntry>[]),
     santri: nextSnapshot.santriRaw
       ? normalizeSantri(
           JSON.parse(nextSnapshot.santriRaw) as Array<
@@ -355,6 +401,11 @@ function seedEntries(santri: Santri[]): IbadahEntry[] {
         puasa: seed % 7 === 0,
         adab: ((seed + idx) % 5) + 1,
         catatan: "",
+        catatanPembina: {
+          text: "",
+          updatedAt: null,
+          readAt: null,
+        },
       });
     });
   }
@@ -373,13 +424,18 @@ export function useStore<T>(selector: (s: Store) => T): T {
 
 export function upsertEntry(entry: IbadahEntry) {
   ensureInit();
+  const normalizedEntry = {
+    ...entry,
+    catatan: entry.catatan ?? "",
+    catatanPembina: normalizeSupervisorNote(entry.catatanPembina),
+  };
   const index = store.entries.findIndex(
     (item) => item.date === entry.date && item.santriId === entry.santriId,
   );
   const nextEntries = [...store.entries];
 
-  if (index >= 0) nextEntries[index] = entry;
-  else nextEntries.push(entry);
+  if (index >= 0) nextEntries[index] = normalizedEntry;
+  else nextEntries.push(normalizedEntry);
 
   store = { ...store, entries: nextEntries };
   persist();
@@ -474,6 +530,63 @@ export function getEntry(date: string, santriId: string): IbadahEntry | undefine
   return store.entries.find((entry) => entry.date === date && entry.santriId === santriId);
 }
 
+export function updateEntrySupervisorNote(date: string, santriId: string, catatanPembina: string) {
+  ensureInit();
+  const index = store.entries.findIndex(
+    (entry) => entry.date === date && entry.santriId === santriId,
+  );
+
+  if (index < 0) return false;
+
+  const nextEntries = [...store.entries];
+  const currentNote = normalizeSupervisorNote(nextEntries[index].catatanPembina);
+  const nextText = catatanPembina.trim();
+  const hasChanged = currentNote.text !== nextText;
+  const updatedAt = hasChanged ? new Date().toISOString() : currentNote.updatedAt;
+  nextEntries[index] = {
+    ...nextEntries[index],
+    catatanPembina: {
+      text: nextText,
+      updatedAt: nextText ? updatedAt : null,
+      readAt: hasChanged ? null : currentNote.readAt,
+    },
+  };
+
+  store = { ...store, entries: nextEntries };
+  persist();
+  emit();
+  broadcastSync();
+  return true;
+}
+
+export function markSupervisorNoteAsRead(date: string, santriId: string) {
+  ensureInit();
+  const index = store.entries.findIndex(
+    (entry) => entry.date === date && entry.santriId === santriId,
+  );
+
+  if (index < 0) return false;
+
+  const current = store.entries[index];
+  const note = normalizeSupervisorNote(current.catatanPembina);
+  if (!note.text.trim() || !hasUnreadSupervisorNote(current)) return false;
+
+  const nextEntries = [...store.entries];
+  nextEntries[index] = {
+    ...current,
+    catatanPembina: {
+      ...note,
+      readAt: new Date().toISOString(),
+    },
+  };
+
+  store = { ...store, entries: nextEntries };
+  persist();
+  emit();
+  broadcastSync();
+  return true;
+}
+
 export function emptyEntry(date: string, santriId: string): IbadahEntry {
   return {
     date,
@@ -493,7 +606,24 @@ export function emptyEntry(date: string, santriId: string): IbadahEntry {
     puasa: false,
     adab: 3,
     catatan: "",
+    catatanPembina: {
+      text: "",
+      updatedAt: null,
+      readAt: null,
+    },
   };
+}
+
+export function hasUnreadSupervisorNote(entry: IbadahEntry) {
+  const note = normalizeSupervisorNote(entry.catatanPembina);
+  if (!note.text.trim() || !note.updatedAt) return false;
+  if (!note.readAt) return true;
+  return note.readAt < note.updatedAt;
+}
+
+export function hasReadSupervisorNote(entry: IbadahEntry) {
+  const note = normalizeSupervisorNote(entry.catatanPembina);
+  return Boolean(note.text.trim()) && !hasUnreadSupervisorNote(entry);
 }
 
 export interface ScoreBreakdown {

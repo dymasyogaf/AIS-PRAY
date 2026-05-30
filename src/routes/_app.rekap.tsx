@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { Info } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -14,9 +15,28 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { RoleGuard } from "@/components/RoleGuard";
 import { filterSantriForRole, isSupervisorRole, useAuth } from "@/lib/auth-store";
-import { SHOLAT_KEYS, scoreEntry, statusOf, type IbadahEntry, useStore } from "@/lib/ibadah-store";
+import {
+  hasReadSupervisorNote,
+  hasUnreadSupervisorNote,
+  markSupervisorNoteAsRead,
+  SHOLAT_KEYS,
+  scoreEntry,
+  statusOf,
+  updateEntrySupervisorNote,
+  type IbadahEntry,
+  useStore,
+} from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/rekap")({
   component: RekapPage,
@@ -374,7 +394,12 @@ function RekapPage() {
         {period.groupBy === "month" ? (
           <MonthTable rows={monthRows} isSupervisor={isSupervisor} periodLabel={period.label} />
         ) : (
-          <DailyTable rows={dailyRows} isSupervisor={isSupervisor} periodLabel={period.label} />
+          <DailyTable
+            rows={dailyRows}
+            isSupervisor={isSupervisor}
+            periodLabel={period.label}
+            santriName={activeSantri?.nama ?? "santri"}
+          />
         )}
       </div>
     </RoleGuard>
@@ -385,89 +410,239 @@ function DailyTable({
   rows,
   isSupervisor,
   periodLabel,
+  santriName,
 }: {
   rows: DailyRow[];
   isSupervisor: boolean;
   periodLabel: string;
+  santriName: string;
 }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border p-5">
-        <h3 className="font-semibold">Tabel Rekap Harian</h3>
-        <span className="text-xs text-muted-foreground">{periodLabel}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2.5 text-left">Tanggal</th>
-              <th className="px-3 py-2.5 text-center">Sholat</th>
-              <th className="px-3 py-2.5 text-center">Tilawah</th>
-              <th className="px-3 py-2.5 text-center">Tahfidz</th>
-              <th className="px-3 py-2.5 text-center">Qiyam</th>
-              <th className="px-3 py-2.5 text-center">Puasa</th>
-              <th className="px-3 py-2.5 text-center">Adab</th>
-              {isSupervisor ? <th className="px-3 py-2.5 text-center">Skor</th> : null}
-              {isSupervisor ? <th className="px-3 py-2.5 text-center">Status</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows
-              .slice()
-              .reverse()
-              .map((row) => {
-                const entry = row.entry;
-                const score = row.score;
-                const status = score ? statusOf(score.total) : null;
+  const [selectedRow, setSelectedRow] = useState<DailyRow | null>(null);
+  const [selectedStudentRow, setSelectedStudentRow] = useState<DailyRow | null>(null);
+  const [selectedSelfNoteRow, setSelectedSelfNoteRow] = useState<DailyRow | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
-                return (
-                  <tr key={row.key} className="border-t border-border">
-                    <td className="px-4 py-2.5 font-medium">{row.date}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      {entry ? `${row.sholatOntime}/5` : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {entry ? `${entry.tilawahHalaman} hlm` : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {entry ? `${entry.tahfidzBaru}+${entry.tahfidzMurajaah}` : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {entry ? `${entry.qiyamRakaat} rk` : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {entry ? (entry.puasa ? "Ya" : "-") : "-"}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">{entry ? `${entry.adab}/5` : "-"}</td>
-                    {isSupervisor ? (
-                      <td className="px-3 py-2.5 text-center font-semibold tabular-nums">
-                        {score?.total ?? "-"}
-                      </td>
-                    ) : null}
-                    {isSupervisor ? (
+  const openNoteDialog = (row: DailyRow) => {
+    if (row.entry && !isSupervisor) {
+      markSupervisorNoteAsRead(row.entry.date, row.entry.santriId);
+      const nextEntry = {
+        ...row.entry,
+        catatanPembina: {
+          ...row.entry.catatanPembina,
+          readAt: new Date().toISOString(),
+        },
+      };
+      setSelectedRow({ ...row, entry: nextEntry });
+      setNoteDraft(nextEntry.catatanPembina.text);
+      return;
+    }
+
+    setSelectedRow(row);
+    setNoteDraft(row.entry?.catatanPembina.text ?? "");
+  };
+
+  const closeNoteDialog = () => {
+    setSelectedRow(null);
+    setNoteDraft("");
+  };
+
+  const openStudentNoteDialog = (row: DailyRow) => {
+    setSelectedStudentRow(row);
+  };
+
+  const closeStudentNoteDialog = () => {
+    setSelectedStudentRow(null);
+  };
+
+  const openSelfNoteDialog = (row: DailyRow) => {
+    setSelectedSelfNoteRow(row);
+  };
+
+  const closeSelfNoteDialog = () => {
+    setSelectedSelfNoteRow(null);
+  };
+
+  const saveNote = () => {
+    if (!selectedRow?.entry) return;
+
+    updateEntrySupervisorNote(selectedRow.entry.date, selectedRow.entry.santriId, noteDraft.trim());
+    setSelectedRow({
+      ...selectedRow,
+      entry: {
+        ...selectedRow.entry,
+        catatanPembina: {
+          ...selectedRow.entry.catatanPembina,
+          text: noteDraft.trim(),
+          updatedAt: noteDraft.trim() ? new Date().toISOString() : null,
+          readAt: null,
+        },
+      },
+    });
+    closeNoteDialog();
+  };
+
+  return (
+    <>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border p-5">
+          <h3 className="font-semibold">Tabel Rekap Harian</h3>
+          <span className="text-xs text-muted-foreground">{periodLabel}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Tanggal</th>
+                <th className="px-3 py-2.5 text-center">Sholat</th>
+                <th className="px-3 py-2.5 text-center">Tilawah</th>
+                <th className="px-3 py-2.5 text-center">Tahfidz</th>
+                <th className="px-3 py-2.5 text-center">Qiyam</th>
+                <th className="px-3 py-2.5 text-center">Puasa</th>
+                <th className="px-3 py-2.5 text-center">Adab</th>
+                {isSupervisor ? <th className="px-3 py-2.5 text-left">Catatan Siswa</th> : null}
+                {!isSupervisor ? <th className="px-3 py-2.5 text-left">Catatan Saya</th> : null}
+                <th className="px-3 py-2.5 text-left">Catatan Pembina</th>
+                {isSupervisor ? <th className="px-3 py-2.5 text-center">Skor</th> : null}
+                {isSupervisor ? <th className="px-3 py-2.5 text-center">Status</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {rows
+                .slice()
+                .reverse()
+                .map((row) => {
+                  const entry = row.entry;
+                  const score = row.score;
+                  const status = score ? statusOf(score.total) : null;
+
+                  return (
+                    <tr key={row.key} className="border-t border-border">
+                      <td className="px-4 py-2.5 font-medium">{row.date}</td>
                       <td className="px-3 py-2.5 text-center">
-                        {status ? (
-                          <span
-                            className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-                            style={{
-                              backgroundColor: `color-mix(in oklab, var(--${status.tone}) 18%, transparent)`,
-                              color: `var(--${status.tone})`,
-                            }}
-                          >
-                            {status.label}
-                          </span>
+                        {entry ? `${row.sholatOntime}/5` : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {entry ? `${entry.tilawahHalaman} hlm` : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {entry ? `${entry.tahfidzBaru}+${entry.tahfidzMurajaah}` : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {entry ? `${entry.qiyamRakaat} rk` : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {entry ? (entry.puasa ? "Ya" : "-") : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">{entry ? `${entry.adab}/5` : "-"}</td>
+                      {isSupervisor ? (
+                        <td className="px-3 py-2.5">
+                          {entry ? (
+                            <div className="flex items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                                {previewSupervisorNote(entry.catatan)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openStudentNoteDialog(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                aria-label="Lihat catatan siswa"
+                              >
+                                <Info className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      ) : null}
+                      {!isSupervisor ? (
+                        <td className="px-3 py-2.5">
+                          {entry ? (
+                            <div className="flex items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                                {previewSupervisorNote(entry.catatan)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openSelfNoteDialog(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                aria-label="Lihat catatan saya"
+                              >
+                                <Info className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      ) : null}
+                      <td className="px-3 py-2.5">
+                        {entry ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                                {previewSupervisorNote(entry.catatanPembina.text)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openNoteDialog(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                aria-label="Lihat catatan pembina"
+                              >
+                                <Info className="h-4 w-4" />
+                              </button>
+                            </div>
+                            {isSupervisor ? <ReadStatusBadge entry={entry} /> : null}
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
+                      {isSupervisor ? (
+                        <td className="px-3 py-2.5 text-center font-semibold tabular-nums">
+                          {score?.total ?? "-"}
+                        </td>
+                      ) : null}
+                      {isSupervisor ? (
+                        <td className="px-3 py-2.5 text-center">
+                          {status ? (
+                            <span
+                              className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{
+                                backgroundColor: `color-mix(in oklab, var(--${status.tone}) 18%, transparent)`,
+                                color: `var(--${status.tone})`,
+                              }}
+                            >
+                              {status.label}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+      <SupervisorNoteDialog
+        row={selectedRow}
+        isSupervisor={isSupervisor}
+        noteDraft={noteDraft}
+        onNoteDraftChange={setNoteDraft}
+        onClose={closeNoteDialog}
+        onSave={saveNote}
+        santriName={santriName}
+      />
+      <StudentNoteDialog
+        row={selectedStudentRow}
+        onClose={closeStudentNoteDialog}
+        santriName={santriName}
+      />
+      <SelfNoteDialog row={selectedSelfNoteRow} onClose={closeSelfNoteDialog} />
+    </>
   );
 }
 
@@ -759,4 +934,170 @@ function Mini({
       </div>
     </div>
   );
+}
+
+function SupervisorNoteDialog({
+  row,
+  isSupervisor,
+  noteDraft,
+  onNoteDraftChange,
+  onClose,
+  onSave,
+  santriName,
+}: {
+  row: DailyRow | null;
+  isSupervisor: boolean;
+  noteDraft: string;
+  onNoteDraftChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  santriName: string;
+}) {
+  const entry = row?.entry;
+
+  return (
+    <Dialog open={Boolean(row)} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogHeader>
+          <DialogTitle>Catatan Pembina</DialogTitle>
+          <DialogDescription>
+            {entry
+              ? `Catatan untuk ${santriName} pada tanggal ${row?.date}.`
+              : "Belum ada data ibadah pada tanggal ini."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {entry ? (
+          isSupervisor ? (
+            <textarea
+              value={noteDraft}
+              onChange={(event) => onNoteDraftChange(event.target.value)}
+              rows={5}
+              placeholder="Tulis catatan pembina untuk santri ini..."
+              className="w-full rounded-2xl border border-input bg-background px-4 py-3 text-sm"
+            />
+          ) : (
+            <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground">
+              {entry.catatanPembina.text.trim() || "Belum ada catatan dari pembina."}
+            </div>
+          )
+        ) : (
+          <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+            Catatan hanya tersedia jika ada entri ibadah pada tanggal ini.
+          </div>
+        )}
+
+        <DialogFooter className="sm:justify-between">
+          <Button variant="outline" onClick={onClose}>
+            Tutup
+          </Button>
+          {entry && isSupervisor ? <Button onClick={onSave}>Simpan Catatan</Button> : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StudentNoteDialog({
+  row,
+  onClose,
+  santriName,
+}: {
+  row: DailyRow | null;
+  onClose: () => void;
+  santriName: string;
+}) {
+  const entry = row?.entry;
+
+  return (
+    <Dialog open={Boolean(row)} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogHeader>
+          <DialogTitle>Catatan Siswa</DialogTitle>
+          <DialogDescription>
+            {entry
+              ? `Catatan dari ${santriName} pada tanggal ${row?.date}.`
+              : "Belum ada data ibadah pada tanggal ini."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground">
+          {entry?.catatan.trim() || "Siswa tidak menambahkan catatan pada entri ini."}
+        </div>
+
+        <DialogFooter className="sm:justify-start">
+          <Button variant="outline" onClick={onClose}>
+            Tutup
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SelfNoteDialog({
+  row,
+  onClose,
+}: {
+  row: DailyRow | null;
+  onClose: () => void;
+}) {
+  const entry = row?.entry;
+
+  return (
+    <Dialog open={Boolean(row)} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent className="max-w-lg rounded-3xl border-border">
+        <DialogHeader>
+          <DialogTitle>Catatan Saya</DialogTitle>
+          <DialogDescription>
+            {entry
+              ? `Catatan yang kamu tulis pada tanggal ${row?.date}.`
+              : "Belum ada data ibadah pada tanggal ini."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground">
+          {entry?.catatan.trim() || "Kamu belum menambahkan catatan pada entri ini."}
+        </div>
+
+        <DialogFooter className="sm:justify-start">
+          <Button variant="outline" onClick={onClose}>
+            Tutup
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function previewSupervisorNote(note: string) {
+  const trimmed = note.trim();
+  if (!trimmed) return "Belum ada catatan";
+
+  const words = trimmed.split(/\s+/).slice(0, 6).join(" ");
+  return words === trimmed ? words : `${words}...`;
+}
+
+function ReadStatusBadge({ entry }: { entry: IbadahEntry }) {
+  if (!entry.catatanPembina.text.trim()) {
+    return <span className="text-xs text-muted-foreground">Belum ada catatan</span>;
+  }
+
+  if (hasUnreadSupervisorNote(entry)) {
+    return (
+      <span className="inline-flex rounded-full bg-[color:var(--warning)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--warning-foreground)]">
+        Belum dibaca
+      </span>
+    );
+  }
+
+  if (hasReadSupervisorNote(entry)) {
+    return (
+      <span className="inline-flex rounded-full bg-[color:var(--success)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--success-foreground)]">
+        Sudah dibaca
+      </span>
+    );
+  }
+
+  return <span className="text-xs text-muted-foreground">Belum ada catatan</span>;
 }

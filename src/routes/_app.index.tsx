@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  Bell,
   BookOpen,
   CheckCircle2,
   Clock,
@@ -25,6 +26,7 @@ import {
 import { filterSantriForRole, isSupervisorRole, roleLabel, useAuth } from "@/lib/auth-store";
 import {
   getPembinaanStreak,
+  hasUnreadSupervisorNote,
   SHOLAT_KEYS,
   emptyEntry,
   getEntry,
@@ -34,6 +36,15 @@ import {
   todayString,
   useStore,
 } from "@/lib/ibadah-store";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_app/")({
   component: Dashboard,
@@ -72,6 +83,8 @@ function dashboardGreeting(
 
 function SantriDashboard() {
   const { session } = useAuth();
+  const [isPopupOpen, setIsPopupOpen] = useState(true);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const activeId = useStore((store) => store.activeSantriId);
   const santri = useStore((store) => store.santri.find((item) => item.id === activeId));
   const entries = useStore((store) => store.entries);
@@ -136,133 +149,233 @@ function SantriDashboard() {
     [activeId, entries],
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {session ? dashboardGreeting(session.role, session.displayName) : santri?.nama}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {new Date().toLocaleDateString("id-ID", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-        </div>
-        <Link
-          to="/input"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Input Hari Ini
-        </Link>
-      </div>
+  const unreadSupervisorNotes = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.santriId === activeId && hasUnreadSupervisorNote(entry))
+        .sort((left, right) => right.date.localeCompare(left.date)),
+    [activeId, entries],
+  );
+  const unreadCount = unreadSupervisorNotes.length;
 
-      <div
-        className="relative overflow-hidden rounded-2xl p-6 text-primary-foreground"
-        style={{ background: "var(--gradient-primary)", boxShadow: "var(--shadow-glow)" }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-6">
+  return (
+    <>
+      <Dialog open={isPopupOpen} onOpenChange={setIsPopupOpen}>
+        <DialogContent className="max-w-md rounded-2xl border-border">
+          <DialogHeader>
+            <DialogTitle>Yuk input ibadah kamu hari ini:)</DialogTitle>
+            <DialogDescription>
+              Isi catatan ibadah harian sekarang supaya dashboard kamu tetap ter-update.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <Link to="/" onClick={() => setIsPopupOpen(false)}>
+                Lihat Dashboard
+              </Link>
+            </Button>
+            <Button asChild className="w-full sm:w-auto">
+              <Link to="/input" onClick={() => setIsPopupOpen(false)}>
+                Input sekarang!
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-wider opacity-80">Aktivitas Hari Ini</div>
-            <div className="mt-2 space-y-2 text-sm">
-              <div>
-                Sholat on-time:{" "}
-                {SHOLAT_KEYS.filter((key) => todayEntry.sholat[key] === "ontime").length}/5
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {session ? dashboardGreeting(session.role, session.displayName) : santri?.nama}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {new Date().toLocaleDateString("id-ID", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsNotificationOpen(true)}
+              className="relative inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+            >
+              <Bell className="h-4 w-4" />
+              Notifikasi Catatan
+              {unreadCount > 0 ? (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[color:var(--danger)] px-1.5 py-0.5 text-xs font-semibold text-[color:var(--danger-foreground)]">
+                  {unreadCount}
+                </span>
+              ) : null}
+            </button>
+            <Link
+              to="/input"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Input Hari Ini
+            </Link>
+          </div>
+        </div>
+
+        <div
+          className="relative overflow-hidden rounded-2xl p-6 text-primary-foreground"
+          style={{ background: "var(--gradient-primary)", boxShadow: "var(--shadow-glow)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <div className="text-xs uppercase tracking-wider opacity-80">Aktivitas Hari Ini</div>
+              <div className="mt-2 space-y-2 text-sm">
+                <div>
+                  Sholat on-time:{" "}
+                  {SHOLAT_KEYS.filter((key) => todayEntry.sholat[key] === "ontime").length}/5
+                </div>
+                <div>Tilawah: {todayEntry.tilawahMenit} menit</div>
+                <div>Tahfidz: {todayEntry.tahfidzBaru + todayEntry.tahfidzMurajaah} halaman</div>
+                <div>Qiyamul lail: {todayEntry.qiyamRakaat} rakaat</div>
               </div>
-              <div>Tilawah: {todayEntry.tilawahMenit} menit</div>
-              <div>Tahfidz: {todayEntry.tahfidzBaru + todayEntry.tahfidzMurajaah} halaman</div>
-              <div>Qiyamul lail: {todayEntry.qiyamRakaat} rakaat</div>
+            </div>
+
+            <div className="h-32 w-full sm:w-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={activityTrend}>
+                  <defs>
+                    <linearGradient id="santri-tilawah" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ffffff" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="tilawah"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    fill="url(#santri-tilawah)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 sm:gap-4">
+          <StatCard
+            icon={<Clock className="h-4 w-4" />}
+            label="Sholat On-Time 30 Hari"
+            value={`${sholatPct}%`}
+          />
+          <StatCard
+            icon={<BookOpen className="h-4 w-4" />}
+            label="Tilawah Bulan Ini"
+            value={`${totalTilawah} menit`}
+          />
+          <StatCard
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Hari Tercatat"
+            value={`${recordedDays}/14`}
+          />
+          <StatCard
+            icon={<GraduationCap className="h-4 w-4" />}
+            label="Total Tahfidz"
+            value={`${tahfidzTotal}`}
+          />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-card p-5 lg:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-semibold">Tren Tilawah 14 Hari</h3>
+              <span className="text-xs text-muted-foreground">Menit</span>
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={activityTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.02 170)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="tilawah"
+                    stroke="oklch(0.55 0.18 165)"
+                    strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="h-32 w-full sm:w-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={activityTrend}>
-                <defs>
-                  <linearGradient id="santri-tilawah" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="tilawah"
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                  fill="url(#santri-tilawah)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-4 font-semibold">Ringkasan Hari Ini</h3>
+            <div className="space-y-3">
+              <ActivityRow label="Subuh" value={statusLabel(todayEntry.sholat.subuh)} />
+              <ActivityRow label="Dzuhur" value={statusLabel(todayEntry.sholat.dzuhur)} />
+              <ActivityRow label="Ashar" value={statusLabel(todayEntry.sholat.ashar)} />
+              <ActivityRow label="Maghrib" value={statusLabel(todayEntry.sholat.maghrib)} />
+              <ActivityRow label="Isya" value={statusLabel(todayEntry.sholat.isya)} />
+              <ActivityRow label="Puasa Sunnah" value={todayEntry.puasa ? "Ya" : "Tidak"} />
+              <ActivityRow label="Adab" value={`${todayEntry.adab}/5`} />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 sm:gap-4">
-        <StatCard
-          icon={<Clock className="h-4 w-4" />}
-          label="Sholat On-Time 30 Hari"
-          value={`${sholatPct}%`}
-        />
-        <StatCard
-          icon={<BookOpen className="h-4 w-4" />}
-          label="Tilawah Bulan Ini"
-          value={`${totalTilawah} menit`}
-        />
-        <StatCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Hari Tercatat"
-          value={`${recordedDays}/14`}
-        />
-        <StatCard
-          icon={<GraduationCap className="h-4 w-4" />}
-          label="Total Tahfidz"
-          value={`${tahfidzTotal}`}
-        />
-      </div>
+      <Dialog open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
+        <DialogContent className="max-w-lg rounded-3xl border-border">
+          <DialogHeader>
+            <DialogTitle>Notifikasi Catatan</DialogTitle>
+            <DialogDescription>
+              {unreadCount
+                ? `Ada ${unreadCount} catatan dari pembina yang belum kamu baca.`
+                : "Belum ada catatan pembina yang belum dibaca."}
+            </DialogDescription>
+          </DialogHeader>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold">Tren Tilawah 14 Hari</h3>
-            <span className="text-xs text-muted-foreground">Menit</span>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={activityTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.02 170)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="tilawah"
-                  stroke="oklch(0.55 0.18 165)"
-                  strokeWidth={2.5}
-                  dot={{ r: 3 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          {unreadCount ? (
+            <div className="space-y-3">
+              {unreadSupervisorNotes.map((entry) => (
+                <div
+                  key={`${entry.date}-${entry.santriId}`}
+                  className="rounded-2xl border border-border bg-background p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">{entry.date}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {previewDashboardNote(entry.catatanPembina.text)}
+                      </div>
+                    </div>
+                    <span className="inline-flex rounded-full bg-[color:var(--warning)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--warning-foreground)]">
+                      Baru
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Semua catatan pembina sudah kamu baca.
+            </div>
+          )}
 
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-4 font-semibold">Ringkasan Hari Ini</h3>
-          <div className="space-y-3">
-            <ActivityRow label="Subuh" value={statusLabel(todayEntry.sholat.subuh)} />
-            <ActivityRow label="Dzuhur" value={statusLabel(todayEntry.sholat.dzuhur)} />
-            <ActivityRow label="Ashar" value={statusLabel(todayEntry.sholat.ashar)} />
-            <ActivityRow label="Maghrib" value={statusLabel(todayEntry.sholat.maghrib)} />
-            <ActivityRow label="Isya" value={statusLabel(todayEntry.sholat.isya)} />
-            <ActivityRow label="Puasa Sunnah" value={todayEntry.puasa ? "Ya" : "Tidak"} />
-            <ActivityRow label="Adab" value={`${todayEntry.adab}/5`} />
-          </div>
-        </div>
-      </div>
-    </div>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="outline" onClick={() => setIsNotificationOpen(false)}>
+              Tutup
+            </Button>
+            <Button asChild>
+              <Link to="/rekap" onClick={() => setIsNotificationOpen(false)}>
+                Lihat Rekap
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -567,4 +680,12 @@ function StatCard({
   }
 
   return <div className={className}>{content}</div>;
+}
+
+function previewDashboardNote(note: string) {
+  const trimmed = note.trim();
+  if (!trimmed) return "Belum ada isi catatan.";
+
+  const words = trimmed.split(/\s+/).slice(0, 10).join(" ");
+  return words === trimmed ? words : `${words}...`;
 }

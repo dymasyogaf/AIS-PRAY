@@ -100,6 +100,11 @@ function InputPage() {
     () => entries.some((entry) => entry.date === today && entry.santriId === activeId),
     [activeId, entries, today],
   );
+  const hasExistingEntryForSelectedDate = useMemo(
+    () => entries.some((entry) => entry.date === date && entry.santriId === activeId),
+    [activeId, date, entries],
+  );
+  const shouldShowSubmittedState = date === today && hasSubmittedToday;
 
   const ontimeCount = useMemo(
     () => SHOLAT_KEYS.filter((key) => draft.sholat[key] === "ontime").length,
@@ -148,6 +153,11 @@ function InputPage() {
       return;
     }
 
+    if (date === today && hasSubmittedToday) {
+      toast.message("Ibadah hari ini sudah tercatat.");
+      return;
+    }
+
     upsertEntry({ ...draft, date, santriId: activeId });
     toast.success("Data ibadah tersimpan");
     goDashboard();
@@ -158,12 +168,12 @@ function InputPage() {
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent
           className={
-            hasSubmittedToday
-              ? "max-w-md rounded-3xl border-border p-0"
-              : "max-h-[90vh] max-w-3xl overflow-y-auto rounded-3xl border-border p-0"
+            shouldShowSubmittedState
+              ? "h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none border-0 p-0 sm:h-auto sm:max-w-md sm:rounded-3xl sm:border sm:border-border"
+              : "h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none border-0 p-0 sm:max-h-[90vh] sm:max-w-3xl sm:rounded-3xl sm:border sm:border-border"
           }
         >
-          {hasSubmittedToday ? (
+          {shouldShowSubmittedState ? (
             <div className="overflow-hidden rounded-3xl bg-card">
               <div
                 className="p-6 text-primary-foreground"
@@ -180,7 +190,7 @@ function InputPage() {
                 </DialogHeader>
               </div>
 
-              <DialogFooter className="px-6 py-5 sm:justify-start">
+              <DialogFooter className="px-4 py-5 sm:px-6 sm:justify-start">
                 <Button variant="outline" onClick={goDashboard}>
                   Kembali ke Dashboard
                 </Button>
@@ -188,125 +198,129 @@ function InputPage() {
               </DialogFooter>
             </div>
           ) : (
-          <div className="overflow-hidden rounded-3xl bg-card">
-            <div
-              className="p-6 text-primary-foreground"
-              style={{ background: "var(--gradient-primary)" }}
-            >
-              <div className="flex items-start justify-between gap-4 pr-8">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] opacity-80">
-                    Langkah {currentStep + 1} dari {totalSteps}
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl bg-card">
+              <div
+                className="p-6 text-primary-foreground"
+                style={{ background: "var(--gradient-primary)" }}
+              >
+                <div className="flex items-start justify-between gap-4 pr-8">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.24em] opacity-80">
+                      Langkah {currentStep + 1} dari {totalSteps}
+                    </div>
+                    <DialogHeader className="mt-3 space-y-2 text-left">
+                      <DialogTitle className="text-2xl sm:text-3xl">{stepMeta.title}</DialogTitle>
+                      <DialogDescription className="max-w-2xl text-primary-foreground/85">
+                        {stepMeta.description}
+                      </DialogDescription>
+                    </DialogHeader>
                   </div>
-                  <DialogHeader className="mt-3 space-y-2 text-left">
-                    <DialogTitle className="text-2xl sm:text-3xl">{stepMeta.title}</DialogTitle>
-                    <DialogDescription className="max-w-2xl text-primary-foreground/85">
-                      {stepMeta.description}
-                    </DialogDescription>
-                  </DialogHeader>
+                </div>
+                <div className="mt-5 h-2 rounded-full bg-white/20">
+                  <div
+                    className="h-full rounded-full bg-white transition-all duration-300"
+                    style={{ width: `${progressPct}%` }}
+                  />
                 </div>
               </div>
-              <div className="mt-5 h-2 rounded-full bg-white/20">
-                <div
-                  className="h-full rounded-full bg-white transition-all duration-300"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </div>
 
-            <div className="space-y-6 p-6">
-              <div className="rounded-2xl border border-border bg-background/70 p-4">
-                <div className="text-sm font-medium">Panduan</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Isi dengan jujur. Kamu bisa kembali ke langkah sebelumnya sebelum menyimpan.
-                </p>
-              </div>
+              <div className="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 sm:pb-32">
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-border bg-background/70 p-4">
+                    <div className="text-sm font-medium">Panduan</div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Isi dengan jujur. Kamu bisa kembali ke langkah sebelumnya sebelum menyimpan.
+                    </p>
+                  </div>
 
-              {currentStep === 0 ? (
-                <StepDate date={date} onChange={setDate} maxDate={today} />
-              ) : null}
-
-              {currentStep === 1 ? (
-                <StepSholat
-                  sholat={draft.sholat}
-                  onChange={(key, value) => update("sholat", { ...draft.sholat, [key]: value })}
-                />
-              ) : null}
-
-              {currentStep === 2 ? (
-                <StepTilawah
-                  minutes={draft.tilawahMenit}
-                  pages={draft.tilawahHalaman}
-                  onMinutesChange={(value) => update("tilawahMenit", value)}
-                  onPagesChange={(value) => update("tilawahHalaman", value)}
-                />
-              ) : null}
-
-              {currentStep === 3 ? (
-                <StepTahfidz
-                  baru={draft.tahfidzBaru}
-                  murajaah={draft.tahfidzMurajaah}
-                  onBaruChange={(value) => update("tahfidzBaru", value)}
-                  onMurajaahChange={(value) => update("tahfidzMurajaah", value)}
-                />
-              ) : null}
-
-              {currentStep === 4 ? (
-                <StepQiyam
-                  value={draft.qiyamRakaat}
-                  onChange={(value) => update("qiyamRakaat", value)}
-                />
-              ) : null}
-
-              {currentStep === 5 ? (
-                <StepPuasa checked={draft.puasa} onChange={(value) => update("puasa", value)} />
-              ) : null}
-
-              {currentStep === 6 ? (
-                <StepAdab value={draft.adab} onChange={(value) => update("adab", value)} />
-              ) : null}
-
-              {currentStep === 7 ? (
-                <StepSummary
-                  date={date}
-                  draft={draft}
-                  ontimeCount={ontimeCount}
-                  lateCount={lateCount}
-                  missCount={missCount}
-                  onCatatanChange={(value) => update("catatan", value)}
-                />
-              ) : null}
-            </div>
-
-            <DialogFooter className="border-t border-border px-6 py-5 sm:justify-between sm:space-x-0">
-              <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-muted-foreground">
-                  {isLastStep
-                    ? "Periksa ringkasan, lalu simpan input ibadahmu."
-                    : "Lanjutkan sampai langkah terakhir untuk menyimpan."}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {currentStep > 0 ? (
-                    <Button variant="outline" onClick={handlePrev}>
-                      <ChevronLeft className="h-4 w-4" />
-                      Kembali
-                    </Button>
+                  {currentStep === 0 ? (
+                    <StepDate date={date} onChange={setDate} maxDate={today} />
                   ) : null}
-                  {isLastStep ? (
-                    <Button onClick={save}>
-                      <Save className="h-4 w-4" />
-                      Simpan Ibadah
-                    </Button>
-                  ) : (
-                    <Button onClick={handleNext}>
-                      Lanjut
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  )}
+
+                  {currentStep === 1 ? (
+                    <StepSholat
+                      sholat={draft.sholat}
+                      onChange={(key, value) => update("sholat", { ...draft.sholat, [key]: value })}
+                    />
+                  ) : null}
+
+                  {currentStep === 2 ? (
+                    <StepTilawah
+                      minutes={draft.tilawahMenit}
+                      pages={draft.tilawahHalaman}
+                      onMinutesChange={(value) => update("tilawahMenit", value)}
+                      onPagesChange={(value) => update("tilawahHalaman", value)}
+                    />
+                  ) : null}
+
+                  {currentStep === 3 ? (
+                    <StepTahfidz
+                      baru={draft.tahfidzBaru}
+                      murajaah={draft.tahfidzMurajaah}
+                      onBaruChange={(value) => update("tahfidzBaru", value)}
+                      onMurajaahChange={(value) => update("tahfidzMurajaah", value)}
+                    />
+                  ) : null}
+
+                  {currentStep === 4 ? (
+                    <StepQiyam
+                      value={draft.qiyamRakaat}
+                      onChange={(value) => update("qiyamRakaat", value)}
+                    />
+                  ) : null}
+
+                  {currentStep === 5 ? (
+                    <StepPuasa checked={draft.puasa} onChange={(value) => update("puasa", value)} />
+                  ) : null}
+
+                  {currentStep === 6 ? (
+                    <StepAdab value={draft.adab} onChange={(value) => update("adab", value)} />
+                  ) : null}
+
+                  {currentStep === 7 ? (
+                    <StepSummary
+                      date={date}
+                      draft={draft}
+                      ontimeCount={ontimeCount}
+                      lateCount={lateCount}
+                      missCount={missCount}
+                      onCatatanChange={(value) => update("catatan", value)}
+                    />
+                  ) : null}
                 </div>
               </div>
-            </DialogFooter>
-          </div>
+
+              <DialogFooter className="sticky bottom-0 border-t border-border bg-card/95 px-4 py-4 backdrop-blur sm:px-6 sm:justify-between sm:space-x-0 sm:py-5">
+                <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    {date !== today && hasExistingEntryForSelectedDate
+                      ? "Tanggal ini sudah punya catatan. Simpan akan memperbarui data sebelumnya."
+                      : isLastStep
+                        ? "Periksa ringkasan, lalu simpan input ibadahmu."
+                        : "Lanjutkan sampai langkah terakhir untuk menyimpan."}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {currentStep > 0 ? (
+                      <Button variant="outline" onClick={handlePrev} className="w-full sm:w-auto">
+                        <ChevronLeft className="h-4 w-4" />
+                        Kembali
+                      </Button>
+                    ) : null}
+                    {isLastStep ? (
+                      <Button onClick={save} className="w-full sm:w-auto">
+                        <Save className="h-4 w-4" />
+                        Simpan Ibadah
+                      </Button>
+                    ) : (
+                      <Button onClick={handleNext} className="w-full sm:w-auto">
+                        Lanjut
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </DialogFooter>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -418,13 +432,7 @@ function StepTahfidz({
   );
 }
 
-function StepQiyam({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-}) {
+function StepQiyam({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
     <div className="max-w-sm">
       <NumberField label="Jumlah rakaat qiyamul lail" value={value} onChange={onChange} />
@@ -457,13 +465,7 @@ function StepPuasa({
   );
 }
 
-function StepAdab({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-}) {
+function StepAdab({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-background p-5">
@@ -582,16 +584,16 @@ function getSholatButtonClassName(currentValue: SholatStatus, option: SholatStat
   const isActive = currentValue === option;
 
   if (!isActive) {
-    return "rounded-xl bg-secondary px-3 py-2 font-medium text-secondary-foreground transition hover:bg-accent";
+    return "min-h-11 rounded-xl bg-secondary px-3 py-2 font-medium text-secondary-foreground transition hover:bg-accent";
   }
 
   if (option === "ontime") {
-    return "rounded-xl bg-[color:var(--success)] px-3 py-2 font-medium text-[color:var(--success-foreground)]";
+    return "min-h-11 rounded-xl bg-[color:var(--success)] px-3 py-2 font-medium text-[color:var(--success-foreground)]";
   }
 
   if (option === "late") {
-    return "rounded-xl bg-[color:var(--warning)] px-3 py-2 font-medium text-[color:var(--warning-foreground)]";
+    return "min-h-11 rounded-xl bg-[color:var(--warning)] px-3 py-2 font-medium text-[color:var(--warning-foreground)]";
   }
 
-  return "rounded-xl bg-[color:var(--danger)] px-3 py-2 font-medium text-[color:var(--danger-foreground)]";
+  return "min-h-11 rounded-xl bg-[color:var(--danger)] px-3 py-2 font-medium text-[color:var(--danger-foreground)]";
 }

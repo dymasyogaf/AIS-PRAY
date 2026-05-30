@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   BookOpen,
@@ -7,8 +7,6 @@ import {
   Clock,
   Flame,
   GraduationCap,
-  Moon,
-  Star,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -23,7 +21,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filterSantriForRole, isSupervisorRole, roleLabel, useAuth } from "@/lib/auth-store";
+import { filterSantriForRole, isSupervisorRole, useAuth } from "@/lib/auth-store";
 import {
   getPembinaanStreak,
   hasUnreadSupervisorNote,
@@ -90,8 +88,15 @@ function SantriDashboard() {
   const entries = useStore((store) => store.entries);
 
   const today = todayString();
+  const hasTodayEntry = useMemo(
+    () => entries.some((entry) => entry.date === today && entry.santriId === activeId),
+    [activeId, entries, today],
+  );
   const todayEntry = useMemo(
-    () => getEntry(today, activeId) ?? emptyEntry(today, activeId),
+    () =>
+      entries.find((entry) => entry.date === today && entry.santriId === activeId) ??
+      getEntry(today, activeId) ??
+      emptyEntry(today, activeId),
     [activeId, entries, today],
   );
 
@@ -158,9 +163,18 @@ function SantriDashboard() {
   );
   const unreadCount = unreadSupervisorNotes.length;
 
+  useEffect(() => {
+    if (hasTodayEntry) {
+      setIsPopupOpen(false);
+      return;
+    }
+
+    setIsPopupOpen(true);
+  }, [hasTodayEntry]);
+
   return (
     <>
-      <Dialog open={isPopupOpen} onOpenChange={setIsPopupOpen}>
+      <Dialog open={!hasTodayEntry && isPopupOpen} onOpenChange={setIsPopupOpen}>
         <DialogContent className="max-w-md rounded-2xl border-border">
           <DialogHeader>
             <DialogTitle>Yuk input ibadah kamu hari ini:)</DialogTitle>
@@ -198,11 +212,11 @@ function SantriDashboard() {
               })}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <button
               type="button"
               onClick={() => setIsNotificationOpen(true)}
-              className="relative inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+              className="relative inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary sm:w-auto"
             >
               <Bell className="h-4 w-4" />
               Notifikasi Catatan
@@ -214,7 +228,7 @@ function SantriDashboard() {
             </button>
             <Link
               to="/input"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 sm:w-auto"
             >
               <CheckCircle2 className="h-4 w-4" />
               Input Hari Ini
@@ -384,7 +398,10 @@ function MusyrifDashboard() {
   const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const today = todayString();
-  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santri = useMemo(
+    () => (session ? filterSantriForRole(session.role, allSantri) : []),
+    [allSantri, session],
+  );
   const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
 
   const todayScores = useMemo(
@@ -569,12 +586,15 @@ function MusyrifDashboard() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex items-center justify-between border-b border-border p-5">
+        <div className="flex flex-col gap-2 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="font-semibold">Skor Hari Ini per {santriLabel}</h3>
           <span className="text-xs text-muted-foreground">{today}</span>
         </div>
+        <div className="px-5 pt-3 text-xs text-muted-foreground md:hidden">
+          Geser tabel ke samping untuk melihat semua kolom.
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[680px] w-full text-sm">
             <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left">Nama</th>

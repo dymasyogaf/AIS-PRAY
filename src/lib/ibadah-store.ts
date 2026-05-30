@@ -51,6 +51,8 @@ const ACTIVE_KEY = "active-santri-v1";
 const SYNC_CHANNEL = "ibadah-sync-v1";
 const PEMBINAAN_KEY = "pembinaan-data-v1";
 const SYNC_POLL_MS = 1000;
+const SHEETS_API_PATH = "/api/sheets";
+const REMOTE_SYNC_COOLDOWN_MS = 1200;
 
 interface Store {
   entries: IbadahEntry[];
@@ -59,7 +61,7 @@ interface Store {
   pembinaan: Record<string, PembinaanFollowUp>;
 }
 
-const DEFAULT_SANTRI: Santri[] = [
+const DEFAULT_SANTRI_BASE: Array<Omit<Santri, "supervisorRole" | "profileType">> = [
   { id: "s1", nama: "Ahmad Faiz Rahman", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
   { id: "s2", nama: "Muhammad Hafidz", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
   { id: "s3", nama: "Yusuf Abdurrahman", kelas: "X-B", asrama: "Al-Hikmah", gender: "putra" },
@@ -68,7 +70,9 @@ const DEFAULT_SANTRI: Santri[] = [
   { id: "s6", nama: "Khadijah Humaira", kelas: "X-B", asrama: "An-Nisa", gender: "putri" },
   { id: "s7", nama: "Maryam Safitri", kelas: "XI-A", asrama: "Al-Hikmah Putri", gender: "putri" },
   { id: "s8", nama: "Safiyya Nabila", kelas: "XII-A", asrama: "Al-Hikmah Putri", gender: "putri" },
-].map((item) => ({
+];
+
+const DEFAULT_SANTRI: Santri[] = DEFAULT_SANTRI_BASE.map((item) => ({
   ...item,
   supervisorRole: item.gender === "putra" ? "musyrif" : "musyrifah",
   profileType: "default" as const,
@@ -76,26 +80,44 @@ const DEFAULT_SANTRI: Santri[] = [
 
 function normalizeSantri(
   input: Array<
-    Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
+    Omit<Santri, "id" | "gender" | "supervisorRole" | "profileType"> & {
+      id?: string;
+      santriId?: string;
       gender?: SantriGender;
       supervisorRole?: SupervisorRole;
       profileType?: "default" | "dummy";
     }
   >,
 ) {
-  return input.map((item) => {
-    const fallback = DEFAULT_SANTRI.find((santri) => santri.id === item.id);
+  return input.reduce<Santri[]>((santriList, item) => {
+    const id = item.id ?? item.santriId ?? "";
+    if (!id) return santriList;
+
+    const fallback = DEFAULT_SANTRI.find((santri) => santri.id === id);
     const gender = item.gender ?? fallback?.gender ?? "putra";
-    return {
-      ...item,
+
+    santriList.push({
+      id,
+      nama: item.nama,
+      kelas: item.kelas,
+      asrama: item.asrama,
       gender,
       supervisorRole:
         item.supervisorRole ??
         fallback?.supervisorRole ??
         (gender === "putra" ? "musyrif" : "musyrifah"),
       profileType: item.profileType ?? fallback?.profileType ?? "default",
-    };
-  });
+    });
+
+    return santriList;
+  }, []);
+}
+
+function formatDateLocal(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 let store: Store = { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
@@ -103,6 +125,11 @@ let initialized = false;
 let syncBound = false;
 let syncChannel: BroadcastChannel | null = null;
 let syncInterval: number | null = null;
+let remoteHydrationStarted = false;
+let remoteSantriSeedStarted = false;
+let remoteHydrationInFlight = false;
+let lastRemoteHydrationAt = 0;
+let lastKnownRouteKey = "";
 const listeners = new Set<() => void>();
 let lastEntriesRaw = "";
 let lastSantriRaw = "";
@@ -275,7 +302,9 @@ function refreshSharedState() {
   if (!hasChanged) return false;
 
   store = {
-    entries: normalizeEntries(JSON.parse(nextSnapshot.entriesRaw || "[]") as Partial<IbadahEntry>[]),
+    entries: normalizeEntries(
+      JSON.parse(nextSnapshot.entriesRaw || "[]") as Partial<IbadahEntry>[],
+    ),
     santri: nextSnapshot.santriRaw
       ? normalizeSantri(
           JSON.parse(nextSnapshot.santriRaw) as Array<
@@ -307,6 +336,28 @@ function broadcastSync() {
   syncChannel?.postMessage({ type: "sync" });
 }
 
+function getRouteKey() {
+  if (typeof window === "undefined") return "";
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function requestRemoteHydration(force = false) {
+  if (typeof window === "undefined" || remoteHydrationInFlight) return;
+
+  const now = Date.now();
+  if (!force && now - lastRemoteHydrationAt < REMOTE_SYNC_COOLDOWN_MS) {
+    return;
+  }
+
+  lastRemoteHydrationAt = now;
+  remoteHydrationInFlight = true;
+
+  void hydrateStoreFromSheets().finally(() => {
+    remoteHydrationInFlight = false;
+    lastRemoteHydrationAt = Date.now();
+  });
+}
+
 function bindRealtimeSync() {
   if (syncBound || typeof window === "undefined") return;
 
@@ -314,6 +365,18 @@ function bindRealtimeSync() {
     if (refreshSharedState()) {
       emit();
     }
+  };
+
+  const handleRemoteSync = () => {
+    requestRemoteHydration();
+  };
+
+  const handleRouteSync = () => {
+    const nextRouteKey = getRouteKey();
+    if (nextRouteKey === lastKnownRouteKey) return;
+    lastKnownRouteKey = nextRouteKey;
+    handleSync();
+    handleRemoteSync();
   };
 
   window.addEventListener("storage", (event) => {
@@ -328,11 +391,18 @@ function bindRealtimeSync() {
     }
   });
 
-  window.addEventListener("focus", handleSync);
-  window.addEventListener("pageshow", handleSync);
+  window.addEventListener("focus", () => {
+    handleSync();
+    handleRemoteSync();
+  });
+  window.addEventListener("pageshow", () => {
+    handleSync();
+    handleRemoteSync();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       handleSync();
+      handleRemoteSync();
     }
   });
 
@@ -345,6 +415,23 @@ function bindRealtimeSync() {
     });
   }
 
+  lastKnownRouteKey = getRouteKey();
+  const originalPushState = window.history.pushState.bind(window.history);
+  window.history.pushState = function (...args) {
+    originalPushState(...args);
+    window.dispatchEvent(new Event("app:navigation"));
+  };
+
+  const originalReplaceState = window.history.replaceState.bind(window.history);
+  window.history.replaceState = function (...args) {
+    originalReplaceState(...args);
+    window.dispatchEvent(new Event("app:navigation"));
+  };
+
+  window.addEventListener("popstate", handleRouteSync);
+  window.addEventListener("hashchange", handleRouteSync);
+  window.addEventListener("app:navigation", handleRouteSync);
+
   // Fallback for tabs/browser contexts where storage or BroadcastChannel events are delayed.
   syncInterval = window.setInterval(handleSync, SYNC_POLL_MS);
   syncBound = true;
@@ -355,6 +442,11 @@ function ensureInit() {
     store = loadStore();
     bindRealtimeSync();
     initialized = true;
+  }
+
+  if (!remoteHydrationStarted && typeof window !== "undefined") {
+    remoteHydrationStarted = true;
+    requestRemoteHydration(true);
   }
 }
 
@@ -379,7 +471,7 @@ function seedEntries(santri: Santri[]): IbadahEntry[] {
   for (let d = 29; d >= 0; d--) {
     const date = new Date(today);
     date.setDate(today.getDate() - d);
-    const dateString = date.toISOString().slice(0, 10);
+    const dateString = formatDateLocal(date);
 
     santri.forEach((item, idx) => {
       const seed = (d * 7 + idx * 13) % 100;
@@ -441,6 +533,7 @@ export function upsertEntry(entry: IbadahEntry) {
   persist();
   emit();
   broadcastSync();
+  void syncEntryToSheets(normalizedEntry);
 }
 
 export function setActiveSantri(id: string) {
@@ -483,6 +576,7 @@ export function updatePembinaanFollowUp(
   persist();
   emit();
   broadcastSync();
+  void syncPembinaanToSheets(pembinaan);
 }
 
 export function createDummySantriProfile(input: {
@@ -511,6 +605,7 @@ export function createDummySantriProfile(input: {
   persist();
   emit();
   broadcastSync();
+  void syncSantriToSheets(profile);
 
   return profile;
 }
@@ -543,7 +638,7 @@ export function updateEntrySupervisorNote(date: string, santriId: string, catata
   const nextText = catatanPembina.trim();
   const hasChanged = currentNote.text !== nextText;
   const updatedAt = hasChanged ? new Date().toISOString() : currentNote.updatedAt;
-  nextEntries[index] = {
+  const nextEntry = {
     ...nextEntries[index],
     catatanPembina: {
       text: nextText,
@@ -551,11 +646,13 @@ export function updateEntrySupervisorNote(date: string, santriId: string, catata
       readAt: hasChanged ? null : currentNote.readAt,
     },
   };
+  nextEntries[index] = nextEntry;
 
   store = { ...store, entries: nextEntries };
   persist();
   emit();
   broadcastSync();
+  void syncEntryToSheets(nextEntry);
   return true;
 }
 
@@ -572,18 +669,20 @@ export function markSupervisorNoteAsRead(date: string, santriId: string) {
   if (!note.text.trim() || !hasUnreadSupervisorNote(current)) return false;
 
   const nextEntries = [...store.entries];
-  nextEntries[index] = {
+  const nextEntry = {
     ...current,
     catatanPembina: {
       ...note,
       readAt: new Date().toISOString(),
     },
   };
+  nextEntries[index] = nextEntry;
 
   store = { ...store, entries: nextEntries };
   persist();
   emit();
   broadcastSync();
+  void syncEntryToSheets(nextEntry);
   return true;
 }
 
@@ -663,7 +762,7 @@ export function statusOf(score: number): {
 }
 
 export function todayString() {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateLocal(new Date());
 }
 
 export function lastNDates(n: number): string[] {
@@ -673,7 +772,7 @@ export function lastNDates(n: number): string[] {
   for (let i = n - 1; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
-    out.push(date.toISOString().slice(0, 10));
+    out.push(formatDateLocal(date));
   }
 
   return out;
@@ -692,4 +791,238 @@ export function getPembinaanStreak(entries: IbadahEntry[], santriId: string) {
   }
 
   return pembinaanStreak;
+}
+
+interface RemoteSheetsData {
+  santriPutra?: Array<Record<string, unknown>>;
+  santriPutri?: Array<Record<string, unknown>>;
+  ibadahPutra?: Array<Record<string, unknown>>;
+  ibadahPutri?: Array<Record<string, unknown>>;
+  pembinaanPutra?: Array<Record<string, unknown>>;
+  pembinaanPutri?: Array<Record<string, unknown>>;
+}
+
+interface SheetsApiResponse {
+  success?: boolean;
+  configured?: boolean;
+  message?: string;
+  data?: RemoteSheetsData | null;
+}
+
+function findSantriById(santriId: string) {
+  return store.santri.find((item) => item.id === santriId);
+}
+
+function toBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.toLowerCase() === "true";
+  return Boolean(value);
+}
+
+function toNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeRemoteEntry(row: Record<string, unknown>): Partial<IbadahEntry> {
+  return {
+    date: String(row.date ?? ""),
+    santriId: String(row.santriId ?? ""),
+    sholat: {
+      subuh: (row.subuh as SholatStatus | undefined) ?? "miss",
+      dzuhur: (row.dzuhur as SholatStatus | undefined) ?? "miss",
+      ashar: (row.ashar as SholatStatus | undefined) ?? "miss",
+      maghrib: (row.maghrib as SholatStatus | undefined) ?? "miss",
+      isya: (row.isya as SholatStatus | undefined) ?? "miss",
+    },
+    tilawahMenit: toNumber(row.tilawahMenit),
+    tilawahHalaman: toNumber(row.tilawahHalaman),
+    tahfidzBaru: toNumber(row.tahfidzBaru),
+    tahfidzMurajaah: toNumber(row.tahfidzMurajaah),
+    qiyamRakaat: toNumber(row.qiyamRakaat),
+    puasa: toBoolean(row.puasa),
+    adab: toNumber(row.adab),
+    catatan: String(row.catatan ?? ""),
+    catatanPembina: {
+      text: String(row.catatanPembina ?? ""),
+      updatedAt: row.catatanPembinaUpdatedAt ? String(row.catatanPembinaUpdatedAt) : null,
+      readAt: row.catatanPembinaReadAt ? String(row.catatanPembinaReadAt) : null,
+    },
+  };
+}
+
+function normalizeRemotePembinaan(
+  rows: Array<Record<string, unknown>>,
+): Record<string, PembinaanFollowUp> {
+  return rows.reduce<Record<string, PembinaanFollowUp>>((acc, row) => {
+    const santriId = String(row.santriId ?? "");
+    if (!santriId) return acc;
+
+    acc[santriId] = {
+      santriId,
+      catatan: String(row.catatan ?? ""),
+      selesai: toBoolean(row.selesai),
+      updatedAt: row.updatedAt ? String(row.updatedAt) : null,
+      selesaiAt: row.selesaiAt ? String(row.selesaiAt) : null,
+    };
+
+    return acc;
+  }, {});
+}
+
+async function postSheetsAction(action: string, payload: unknown) {
+  try {
+    const response = await fetch(SHEETS_API_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, payload }),
+    });
+
+    return (await response.json()) as SheetsApiResponse;
+  } catch (error) {
+    console.error("Google Sheets sync failed:", error);
+    return null;
+  }
+}
+
+async function fetchSheetsData() {
+  try {
+    const response = await fetch(SHEETS_API_PATH);
+    return (await response.json()) as SheetsApiResponse;
+  } catch (error) {
+    console.error("Google Sheets hydration failed:", error);
+    return null;
+  }
+}
+
+async function hydrateStoreFromSheets() {
+  const response = await fetchSheetsData();
+  if (!response?.success || !response.data) return;
+
+  const remoteSantriRows = [
+    ...(response.data.santriPutra ?? []),
+    ...(response.data.santriPutri ?? []),
+  ] as Array<
+    Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
+      gender?: SantriGender;
+      supervisorRole?: SupervisorRole;
+      profileType?: "default" | "dummy";
+    }
+  >;
+  const remoteEntryRows = [
+    ...(response.data.ibadahPutra ?? []),
+    ...(response.data.ibadahPutri ?? []),
+  ] as Array<Record<string, unknown>>;
+  const remotePembinaanRows = [
+    ...(response.data.pembinaanPutra ?? []),
+    ...(response.data.pembinaanPutri ?? []),
+  ] as Array<Record<string, unknown>>;
+
+  if (remoteSantriRows.length === 0) {
+    void seedSantriSheetsFromLocalStore();
+  }
+
+  const nextStore: Store = {
+    ...store,
+    santri: remoteSantriRows.length ? normalizeSantri(remoteSantriRows) : store.santri,
+    entries: remoteEntryRows.length
+      ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry))
+      : store.entries,
+    pembinaan: remotePembinaanRows.length
+      ? normalizeRemotePembinaan(remotePembinaanRows)
+      : store.pembinaan,
+    activeSantriId: store.activeSantriId,
+  };
+
+  if (!nextStore.santri.some((item) => item.id === nextStore.activeSantriId)) {
+    nextStore.activeSantriId = nextStore.santri[0]?.id ?? "s1";
+  }
+
+  const hasChanged =
+    JSON.stringify(nextStore.entries) !== JSON.stringify(store.entries) ||
+    JSON.stringify(nextStore.santri) !== JSON.stringify(store.santri) ||
+    JSON.stringify(nextStore.pembinaan) !== JSON.stringify(store.pembinaan) ||
+    nextStore.activeSantriId !== store.activeSantriId;
+
+  if (!hasChanged) return;
+
+  store = nextStore;
+  persist();
+  emit();
+  broadcastSync();
+}
+
+async function seedSantriSheetsFromLocalStore() {
+  if (remoteSantriSeedStarted) return;
+  remoteSantriSeedStarted = true;
+
+  for (const santri of store.santri) {
+    await syncSantriToSheets(santri);
+  }
+}
+
+async function syncSantriToSheets(santri: Santri) {
+  const response = await postSheetsAction("upsertSantri", {
+    santriId: santri.id,
+    nama: santri.nama,
+    kelas: santri.kelas,
+    asrama: santri.asrama,
+    gender: santri.gender,
+    supervisorRole: santri.supervisorRole,
+    profileType: santri.profileType ?? "default",
+  });
+
+  if (response && response.success === false && response.configured !== false) {
+    console.error("Google Sheets santri sync rejected:", response.message);
+  }
+}
+
+async function syncEntryToSheets(entry: IbadahEntry) {
+  const santri = findSantriById(entry.santriId);
+  if (!santri) return;
+
+  const response = await postSheetsAction("upsertIbadah", {
+    date: entry.date,
+    santriId: entry.santriId,
+    nama: santri.nama,
+    kelas: santri.kelas,
+    asrama: santri.asrama,
+    gender: santri.gender,
+    supervisorRole: santri.supervisorRole,
+    sholat: entry.sholat,
+    tilawahMenit: entry.tilawahMenit,
+    tilawahHalaman: entry.tilawahHalaman,
+    tahfidzBaru: entry.tahfidzBaru,
+    tahfidzMurajaah: entry.tahfidzMurajaah,
+    qiyamRakaat: entry.qiyamRakaat,
+    puasa: entry.puasa,
+    adab: entry.adab,
+    catatan: entry.catatan,
+    catatanPembina: entry.catatanPembina,
+  });
+
+  if (response && response.success === false && response.configured !== false) {
+    console.error("Google Sheets ibadah sync rejected:", response.message);
+  }
+}
+
+async function syncPembinaanToSheets(pembinaan: PembinaanFollowUp) {
+  const santri = findSantriById(pembinaan.santriId);
+  if (!santri) return;
+
+  const response = await postSheetsAction("upsertPembinaan", {
+    santriId: pembinaan.santriId,
+    nama: santri.nama,
+    kelas: santri.kelas,
+    asrama: santri.asrama,
+    gender: santri.gender,
+    supervisorRole: santri.supervisorRole,
+    catatan: pembinaan.catatan,
+    selesai: pembinaan.selesai,
+    selesaiAt: pembinaan.selesaiAt,
+  });
+
+  if (response && response.success === false && response.configured !== false) {
+    console.error("Google Sheets pembinaan sync rejected:", response.message);
+  }
 }

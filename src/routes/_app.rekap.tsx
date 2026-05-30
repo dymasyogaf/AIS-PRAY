@@ -71,6 +71,12 @@ interface MonthRow {
   scoreAverage: number;
 }
 
+interface AnalyticRow {
+  entry: IbadahEntry;
+  score: ReturnType<typeof scoreEntry>;
+  sholatOntime: number;
+}
+
 function RekapPage() {
   const { session } = useAuth();
   const activeId = useStore((store) => store.activeSantriId);
@@ -172,7 +178,7 @@ function RekapPage() {
     [period.end, period.groupBy, periodEntries, selectedYear],
   );
 
-  const analyticRows = useMemo(
+  const analyticRows = useMemo<AnalyticRow[]>(
     () =>
       periodEntries.map((entry) => ({
         entry,
@@ -194,20 +200,17 @@ function RekapPage() {
     { kategori: "Sholat On-Time", nilai: averageSholatOntime(analyticRows) },
     {
       kategori: "Tilawah",
-      nilai: completionRate(analyticRows, (row) => (row.entry?.tilawahMenit ?? 0) > 0),
+      nilai: completionRate(analyticRows, (entry) => entry.tilawahMenit > 0),
     },
     {
       kategori: "Tahfidz",
-      nilai: completionRate(
-        analyticRows,
-        (row) => (row.entry?.tahfidzBaru ?? 0) + (row.entry?.tahfidzMurajaah ?? 0) > 0,
-      ),
+      nilai: completionRate(analyticRows, (entry) => entry.tahfidzBaru + entry.tahfidzMurajaah > 0),
     },
     {
       kategori: "Qiyam",
-      nilai: completionRate(analyticRows, (row) => (row.entry?.qiyamRakaat ?? 0) > 0),
+      nilai: completionRate(analyticRows, (entry) => entry.qiyamRakaat > 0),
     },
-    { kategori: "Puasa", nilai: completionRate(analyticRows, (row) => row.entry?.puasa === true) },
+    { kategori: "Puasa", nilai: completionRate(analyticRows, (entry) => entry.puasa) },
     { kategori: "Adab", nilai: averageAdab(analyticRows) },
   ];
 
@@ -259,8 +262,8 @@ function RekapPage() {
             </p>
           </div>
 
-          <div className="space-y-3">
-            <div className="inline-flex rounded-lg border border-border bg-card p-1">
+          <div className="w-full space-y-3 lg:w-auto">
+            <div className="grid w-full grid-cols-3 rounded-lg border border-border bg-card p-1 sm:inline-flex sm:w-auto">
               {[
                 { key: "weekly", label: "Mingguan" },
                 { key: "monthly", label: "Bulanan" },
@@ -484,12 +487,15 @@ function DailyTable({
   return (
     <>
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex items-center justify-between border-b border-border p-5">
+        <div className="flex flex-col gap-2 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="font-semibold">Tabel Rekap Harian</h3>
           <span className="text-xs text-muted-foreground">{periodLabel}</span>
         </div>
+        <div className="px-5 pt-3 text-xs text-muted-foreground md:hidden">
+          Geser tabel ke samping untuk melihat detail lengkap.
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[920px] w-full text-sm">
             <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 text-left">Tanggal</th>
@@ -657,12 +663,15 @@ function MonthTable({
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border p-5">
+      <div className="flex flex-col gap-2 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-semibold">Tabel Rekap Bulanan</h3>
         <span className="text-xs text-muted-foreground">{periodLabel}</span>
       </div>
+      <div className="px-5 pt-3 text-xs text-muted-foreground md:hidden">
+        Geser tabel ke samping untuk melihat detail lengkap.
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="min-w-[760px] w-full text-sm">
           <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-4 py-2.5 text-left">Bulan</th>
@@ -877,38 +886,32 @@ function toDateKey(date: Date) {
 }
 
 function averageScorePart(
-  rows: Array<{ score: ReturnType<typeof scoreEntry> | null }>,
+  rows: AnalyticRow[],
   key: keyof ReturnType<typeof scoreEntry>,
   max: number,
 ) {
-  const values = rows.filter((row) => row.score).map((row) => row.score![key] as number);
+  const values = rows.map((row) => row.score[key] as number);
   return values.length
     ? Math.round((values.reduce((a, b) => a + b, 0) / values.length / max) * 100)
     : 0;
 }
 
-function averageSholatOntime(
-  rows: Array<{ entry: { sholat: Record<(typeof SHOLAT_KEYS)[number], string> } | undefined }>,
-) {
-  const values = rows
-    .filter((row) => row.entry)
-    .map((row) => SHOLAT_KEYS.filter((key) => row.entry!.sholat[key] === "ontime").length);
+function averageSholatOntime(rows: AnalyticRow[]) {
+  const values = rows.map(
+    (row) => SHOLAT_KEYS.filter((key) => row.entry.sholat[key] === "ontime").length,
+  );
   return values.length
     ? Math.round((values.reduce((a, b) => a + b, 0) / values.length / 5) * 100)
     : 0;
 }
 
-function completionRate(
-  rows: Array<{ entry: unknown }>,
-  predicate: (row: Array<{ entry: unknown }>[number]) => boolean,
-) {
-  const total = rows.filter((row) => row.entry).length;
-  const done = rows.filter((row) => row.entry && predicate(row)).length;
-  return total ? Math.round((done / total) * 100) : 0;
+function completionRate(rows: AnalyticRow[], predicate: (entry: IbadahEntry) => boolean) {
+  const done = rows.filter((row) => predicate(row.entry)).length;
+  return rows.length ? Math.round((done / rows.length) * 100) : 0;
 }
 
-function averageAdab(rows: Array<{ entry: { adab: number } | undefined }>) {
-  const values = rows.filter((row) => row.entry).map((row) => row.entry!.adab);
+function averageAdab(rows: AnalyticRow[]) {
+  const values = rows.map((row) => row.entry.adab);
   return values.length
     ? Math.round((values.reduce((a, b) => a + b, 0) / values.length / 5) * 100)
     : 0;
@@ -1035,13 +1038,7 @@ function StudentNoteDialog({
   );
 }
 
-function SelfNoteDialog({
-  row,
-  onClose,
-}: {
-  row: DailyRow | null;
-  onClose: () => void;
-}) {
+function SelfNoteDialog({ row, onClose }: { row: DailyRow | null; onClose: () => void }) {
   const entry = row?.entry;
 
   return (

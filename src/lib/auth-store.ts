@@ -28,8 +28,16 @@ interface AuthState {
   session: AuthSession | null;
 }
 
+interface SheetsApiResponse {
+  success: boolean;
+  configured?: boolean;
+  message?: string;
+  data?: unknown;
+}
+
 const SESSION_STORAGE_KEY = "auth-session-v1";
 const ACCOUNT_STORAGE_KEY = "auth-accounts-v1";
+const SHEETS_API_PATH = "/api/sheets";
 
 const DEMO_ACCOUNTS: AuthAccount[] = [
   {
@@ -74,10 +82,64 @@ const DEMO_ACCOUNTS: AuthAccount[] = [
 
 let state: AuthState = { isReady: false, session: null };
 let initialized = false;
+let accountsHydrationStarted = false;
+let demoSeedStarted = false;
 const listeners = new Set<() => void>();
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
+}
+
+function isAuthAccount(value: unknown): value is AuthAccount {
+  if (!value || typeof value !== "object") return false;
+
+  const account = value as Record<string, unknown>;
+  const session = account.session as Record<string, unknown> | undefined;
+
+  return (
+    typeof account.username === "string" &&
+    typeof account.password === "string" &&
+    !!session &&
+    typeof session.username === "string" &&
+    typeof session.role === "string" &&
+    typeof session.displayName === "string"
+  );
+}
+
+function normalizeRemoteAccounts(input: unknown): AuthAccount[] {
+  const rows = Array.isArray(input)
+    ? input
+    : input && typeof input === "object" && Array.isArray((input as { users?: unknown[] }).users)
+      ? ((input as { users: unknown[] }).users ?? [])
+      : [];
+
+  return rows.reduce<AuthAccount[]>((accounts, row) => {
+    if (!row || typeof row !== "object") return accounts;
+
+    const record = row as Record<string, unknown>;
+    const username = normalizeUsername(String(record.username ?? ""));
+    const password = String(record.password ?? "").trim();
+    const displayName = String(record.displayName ?? "");
+    const role = String(record.role ?? "");
+    const santriId = record.santriId ? String(record.santriId) : undefined;
+
+    if (!username || !password || !displayName || !isKnownUserRole(role)) {
+      return accounts;
+    }
+
+    accounts.push({
+      username,
+      password,
+      session: {
+        username,
+        role,
+        displayName,
+        santriId,
+      },
+    });
+
+    return accounts;
+  }, []);
 }
 
 function readAccounts() {
@@ -86,8 +148,9 @@ function readAccounts() {
   try {
     const raw = localStorage.getItem(ACCOUNT_STORAGE_KEY);
     if (!raw) return DEMO_ACCOUNTS;
-    const parsed = JSON.parse(raw) as AuthAccount[];
-    return parsed.length ? parsed : DEMO_ACCOUNTS;
+    const parsed = JSON.parse(raw) as unknown[];
+    const accounts = parsed.filter(isAuthAccount);
+    return accounts.length ? accounts : DEMO_ACCOUNTS;
   } catch {
     return DEMO_ACCOUNTS;
   }
@@ -96,6 +159,146 @@ function readAccounts() {
 function persistAccounts(accounts: AuthAccount[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accounts));
+}
+
+function isKnownUserRole(role: string): role is UserRole {
+  return role === "musyrif" || role === "musyrifah" || role === "santri" || role === "santriwati";
+}
+
+async function postSheetsAction(action: "getUsers" | "upsertUser", payload: unknown) {
+  try {
+    const response = await fetch(SHEETS_API_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, payload }),
+    });
+
+    return (await response.json()) as SheetsApiResponse;
+  } catch (error) {
+    console.error("Google Sheets auth sync failed:", error);
+    return null;
+  }
+}
+
+async function upsertUserToSheets(account: AuthAccount) {
+  const response = await postSheetsAction("upsertUser", {
+    username: account.username,
+    password: account.password,
+    displayName: account.session.displayName,
+    role: account.session.role,
+    santriId: account.session.santriId ?? "",
+  });
+
+  if (!response) {
+    return {
+      ok: false as const,
+      message: "Tidak dapat menghubungi database akun.",
+    };
+  }
+
+  if (!response.success) {
+    return {
+      ok: false as const,
+      message: response.message || "Gagal menyimpan akun ke Google Sheet.",
+      configured: response.configured,
+    };
+  }
+
+  return { ok: true as const };
+}
+
+async function fetchRemoteAccounts() {
+  const response = await postSheetsAction("getUsers", {});
+
+  if (!response) {
+    return {
+      ok: false as const,
+      message: "Tidak dapat menghubungi database akun.",
+      configured: true,
+      accounts: [] as AuthAccount[],
+    };
+  }
+
+  if (response.configured === false) {
+    return {
+      ok: true as const,
+      message: response.message,
+      configured: false,
+      accounts: readAccounts(),
+    };
+  }
+
+  if (!response.success) {
+    return {
+      ok: false as const,
+      message: response.message || "Gagal membaca database akun dari Google Sheet.",
+      configured: true,
+      accounts: [] as AuthAccount[],
+    };
+  }
+
+  return {
+    ok: true as const,
+    configured: true,
+    accounts: normalizeRemoteAccounts(response.data),
+  };
+}
+
+async function seedDemoAccountsToSheets() {
+  if (demoSeedStarted) return { ok: true as const };
+
+  demoSeedStarted = true;
+  for (const account of DEMO_ACCOUNTS) {
+    const result = await upsertUserToSheets(account);
+    if (!result.ok) {
+      demoSeedStarted = false;
+      return result;
+    }
+  }
+
+  return { ok: true as const };
+}
+
+async function loadAccountsFromSource() {
+  const remote = await fetchRemoteAccounts();
+
+  if (!remote.ok) return remote;
+
+  if (!remote.configured) {
+    persistAccounts(remote.accounts);
+    return remote;
+  }
+
+  if (remote.accounts.length > 0) {
+    persistAccounts(remote.accounts);
+    return remote;
+  }
+
+  const seedResult = await seedDemoAccountsToSheets();
+  if (!seedResult.ok) {
+    return {
+      ok: false as const,
+      message: seedResult.message,
+      configured: seedResult.configured !== false,
+      accounts: [] as AuthAccount[],
+    };
+  }
+
+  const seededRemote = await fetchRemoteAccounts();
+  if (!seededRemote.ok) return seededRemote;
+
+  persistAccounts(seededRemote.accounts);
+  return seededRemote;
+}
+
+async function hydrateAccountsFromSheets() {
+  if (accountsHydrationStarted || typeof window === "undefined") return;
+  accountsHydrationStarted = true;
+
+  const result = await loadAccountsFromSource();
+  if (result.ok) {
+    persistAccounts(result.accounts);
+  }
 }
 
 export function roleLabel(role: UserRole) {
@@ -164,7 +367,9 @@ function loadState(): AuthState {
     if (raw) {
       session = JSON.parse(raw) as AuthSession;
     }
-  } catch {}
+  } catch {
+    session = null;
+  }
 
   syncRoleState(session);
   return { isReady: true, session };
@@ -174,6 +379,7 @@ function ensureInit() {
   if (!initialized && typeof window !== "undefined") {
     state = loadState();
     initialized = true;
+    void hydrateAccountsFromSheets();
   }
 }
 
@@ -206,11 +412,20 @@ export function useAuth() {
   );
 }
 
-export function login(username: string, password: string) {
+export async function login(username: string, password: string) {
   ensureInit();
 
   const normalizedUsername = normalizeUsername(username);
-  const account = readAccounts().find((item) => item.username === normalizedUsername);
+  const source = await loadAccountsFromSource();
+
+  if (!source.ok) {
+    return {
+      ok: false as const,
+      message: source.message,
+    };
+  }
+
+  const account = source.accounts.find((item) => item.username === normalizedUsername);
 
   if (!account || account.password !== password) {
     return {
@@ -230,7 +445,7 @@ export function login(username: string, password: string) {
   return { ok: true as const };
 }
 
-export function registerAccount(input: {
+export async function registerAccount(input: {
   role: UserRole;
   username: string;
   password: string;
@@ -241,13 +456,17 @@ export function registerAccount(input: {
 
   const username = normalizeUsername(input.username);
   const password = input.password.trim();
-  const accounts = readAccounts();
+  const source = await loadAccountsFromSource();
+
+  if (!source.ok) {
+    return { ok: false as const, message: source.message };
+  }
 
   if (!username) {
     return { ok: false as const, message: "Username wajib diisi." };
   }
 
-  if (accounts.some((item) => item.username === username)) {
+  if (source.accounts.some((item) => item.username === username)) {
     return { ok: false as const, message: "Username sudah digunakan." };
   }
 
@@ -299,7 +518,15 @@ export function registerAccount(input: {
     session,
   };
 
-  persistAccounts([...accounts, account]);
+  const syncResult = await upsertUserToSheets(account);
+  if (!syncResult.ok) {
+    return {
+      ok: false as const,
+      message: syncResult.message,
+    };
+  }
+
+  persistAccounts([...source.accounts, account]);
 
   state = {
     isReady: true,

@@ -35,7 +35,7 @@ const nav = [
   {
     to: "/",
     label: "Dashboard",
-    mobileLabel: "Dashboard",
+    mobileLabel: "Dash",
     icon: LayoutDashboard,
     roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
   },
@@ -56,7 +56,7 @@ const nav = [
   {
     to: "/ranking",
     label: "Ranking",
-    mobileLabel: "Ranking",
+    mobileLabel: "Rank",
     icon: Trophy,
     roles: ["musyrif", "musyrifah"] as UserRole[],
   },
@@ -70,7 +70,7 @@ const nav = [
   {
     to: "/butuh-pembinaan",
     label: "Butuh Pembinaan",
-    mobileLabel: "Pembinaan",
+    mobileLabel: "Bina",
     icon: Flame,
     roles: ["musyrif", "musyrifah"] as UserRole[],
   },
@@ -183,7 +183,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
+      <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-2 lg:hidden">
         <div className="flex items-center gap-2">
           <div
             className="flex h-8 w-8 items-center justify-center rounded-lg text-primary-foreground"
@@ -194,12 +194,12 @@ export function AppShell() {
           <span className="text-sm font-semibold">Rekap Ibadah</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {canSwitchSantri ? (
             <select
               value={activeId}
               onChange={(event) => setActiveSantri(event.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+              className="max-w-32 rounded-md border border-input bg-background px-2 py-1 text-xs"
             >
               {santri.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -220,13 +220,13 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="lg:pl-64">
-        <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+      <main className="pb-[calc(env(safe-area-inset-bottom)+5rem)] lg:pb-0 lg:pl-64">
+        <div className="mx-auto max-w-7xl p-4 pb-24 sm:p-6 sm:pb-28 lg:p-8 lg:pb-8">
           <Outlet />
         </div>
 
         <nav
-          className="fixed inset-x-0 bottom-0 z-20 grid border-t border-border bg-card lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-20 grid border-t border-border bg-card/95 pt-1 backdrop-blur lg:hidden"
           style={{ gridTemplateColumns: `repeat(${visibleNav.length}, minmax(0, 1fr))` }}
         >
           {visibleNav.map((item) => {
@@ -238,18 +238,19 @@ export function AppShell() {
               <Link
                 key={item.to}
                 to={item.to}
+                aria-label={item.label}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 py-2 text-[10px]",
-                  isActive ? "text-primary" : "text-muted-foreground",
+                  "flex min-w-0 flex-col items-center gap-1 px-1 py-2.5 text-[10px] font-medium",
+                  isActive ? "rounded-xl bg-primary/10 text-primary" : "text-muted-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {item.mobileLabel}
+                <span className="truncate">{item.mobileLabel}</span>
               </Link>
             );
           })}
         </nav>
-        <div className="h-16 lg:hidden" />
+        <div className="h-[calc(4.5rem+env(safe-area-inset-bottom))] lg:hidden" />
       </main>
 
       <AlertDialog open={isLogoutOpen} onOpenChange={setIsLogoutOpen}>

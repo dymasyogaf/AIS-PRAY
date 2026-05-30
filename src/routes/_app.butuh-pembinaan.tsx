@@ -21,7 +21,10 @@ function ButuhPembinaanPage() {
   const entries = useStore((store) => store.entries);
   const pembinaan = useStore((store) => store.pembinaan);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santri = useMemo(
+    () => (session ? filterSantriForRole(session.role, allSantri) : []),
+    [allSantri, session],
+  );
   const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
 
   const pembinaanList = useMemo(

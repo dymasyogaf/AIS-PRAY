@@ -34,6 +34,8 @@ function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const roleOptions: UserRole[] = ["musyrif", "musyrifah", "santri", "santriwati"];
   const needsSantriProfile = isStudentRole(registerRole);
@@ -53,9 +55,11 @@ function LoginPage() {
     return <Navigate to="/" />;
   }
 
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = login(username.trim(), password);
+    setIsLoggingIn(true);
+    const result = await login(username.trim(), password);
+    setIsLoggingIn(false);
 
     if (!result.ok) {
       setError(result.message);
@@ -65,7 +69,7 @@ function LoginPage() {
     setError("");
   };
 
-  const onRegister = (event: FormEvent<HTMLFormElement>) => {
+  const onRegister = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (registerPassword !== confirmPassword) {
@@ -73,13 +77,15 @@ function LoginPage() {
       return;
     }
 
-    const result = registerAccount({
+    setIsRegistering(true);
+    const result = await registerAccount({
       role: registerRole,
       displayName: registerName,
       kelas: needsSantriProfile ? registerKelas : undefined,
       username: registerUsername,
       password: registerPassword,
     });
+    setIsRegistering(false);
 
     if (!result.ok) {
       setRegisterError(result.message);
@@ -92,7 +98,7 @@ function LoginPage() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,oklch(0.96_0.04_165),transparent_45%),linear-gradient(180deg,oklch(0.99_0.01_165),oklch(0.96_0.02_165))] px-4 py-10 text-foreground">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="space-y-6">
+        <section className="order-2 space-y-6 lg:order-1">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium shadow-sm backdrop-blur">
             <ShieldCheck className="h-4 w-4 text-primary" />
             Sistem monitoring ibadah santri
@@ -138,7 +144,7 @@ function LoginPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_80px_oklch(0.68_0.15_165_/_0.15)] sm:p-8">
+        <section className="order-1 rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_80px_oklch(0.68_0.15_165_/_0.15)] sm:p-8 lg:order-2">
           <div className="mb-6 flex gap-2 rounded-2xl border border-border bg-secondary/60 p-1">
             <button
               type="button"
@@ -180,7 +186,7 @@ function LoginPage() {
                 </div>
                 <h2 className="mt-4 text-2xl font-bold tracking-tight">Masuk ke aplikasi</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Gunakan akun demo atau akun yang sudah Anda daftarkan di browser ini.
+                  Gunakan akun demo atau akun yang tersimpan pada database Google Sheet.
                 </p>
               </div>
 
@@ -214,10 +220,11 @@ function LoginPage() {
 
                 <button
                   type="submit"
+                  disabled={isLoggingIn}
                   className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
                   style={{ background: "var(--gradient-primary)" }}
                 >
-                  Login
+                  {isLoggingIn ? "Memeriksa akun..." : "Login"}
                 </button>
               </form>
             </>
@@ -229,7 +236,7 @@ function LoginPage() {
                 </div>
                 <h2 className="mt-4 text-2xl font-bold tracking-tight">Daftar akun baru</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Akun baru akan tersimpan lokal pada browser ini dan langsung masuk setelah daftar.
+                  Akun baru disimpan ke database Google Sheet dan langsung aktif setelah daftar.
                 </p>
               </div>
 
@@ -324,10 +331,11 @@ function LoginPage() {
 
                 <button
                   type="submit"
+                  disabled={isRegistering}
                   className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
                   style={{ background: "var(--gradient-primary)" }}
                 >
-                  Buat Akun
+                  {isRegistering ? "Menyimpan akun..." : "Buat Akun"}
                 </button>
               </form>
             </>

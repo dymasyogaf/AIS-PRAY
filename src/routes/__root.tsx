@@ -74,7 +74,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Rekap Ibadah Santri" },
-      { name: "description", content: "Sistem tracking & evaluasi ibadah harian santri dengan dashboard, rekap, dan ranking." },
+      {
+        name: "description",
+        content:
+          "Sistem tracking & evaluasi ibadah harian santri dengan dashboard, rekap, dan ranking.",
+      },
       { property: "og:title", content: "Rekap Ibadah Santri" },
       { property: "og:description", content: "Tracking ibadah harian santri." },
       { property: "og:type", content: "website" },

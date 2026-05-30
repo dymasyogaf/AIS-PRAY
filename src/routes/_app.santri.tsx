@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import { RoleGuard } from "@/components/RoleGuard";
 import { filterSantriForRole, useAuth } from "@/lib/auth-store";
@@ -15,7 +16,10 @@ function SantriPage() {
   const entries = useStore((store) => store.entries);
   const activeId = useStore((store) => store.activeSantriId);
   const dates = new Set(lastNDates(7));
-  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santri = useMemo(
+    () => (session ? filterSantriForRole(session.role, allSantri) : []),
+    [allSantri, session],
+  );
   const santriLabel = santri[0]?.gender === "putri" ? "Santriwati" : "Santri";
 
   return (
@@ -72,7 +76,7 @@ function SantriPage() {
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
 
-                <div className="mt-3 flex items-center justify-between text-xs">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">Rata-rata 7 hari</span>
                   <span
                     className="rounded-full px-2 py-0.5 font-semibold"

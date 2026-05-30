@@ -17,7 +17,10 @@ function RankingPage() {
   const activeId = useStore((store) => store.activeSantriId);
   const [range, setRange] = useState<7 | 30>(30);
   const [asrama, setAsrama] = useState<string>("all");
-  const santri = session ? filterSantriForRole(session.role, allSantri) : [];
+  const santri = useMemo(
+    () => (session ? filterSantriForRole(session.role, allSantri) : []),
+    [allSantri, session],
+  );
   const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
 
   const asramaList = Array.from(new Set(santri.map((item) => item.asrama)));
@@ -53,11 +56,11 @@ function RankingPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <select
               value={asrama}
               onChange={(event) => setAsrama(event.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
+              className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm sm:w-auto"
             >
               <option value="all">Semua Asrama</option>
               {asramaList.map((item) => (
@@ -118,46 +121,51 @@ function RankingPage() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="w-12 px-4 py-3 text-left">#</th>
-                <th className="px-3 py-3 text-left">Nama</th>
-                <th className="hidden px-3 py-3 text-left sm:table-cell">Kelas</th>
-                <th className="hidden px-3 py-3 text-left md:table-cell">Asrama</th>
-                <th className="px-3 py-3 text-center">Hari</th>
-                <th className="px-3 py-3 text-center">Skor Rata-rata</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranking.map((item, index) => (
-                <tr
-                  key={item.id}
-                  className={
-                    "border-t border-border " + (item.id === activeId ? "bg-primary/5" : "")
-                  }
-                >
-                  <td className="px-4 py-3 font-semibold text-muted-foreground">{index + 1}</td>
-                  <td className="px-3 py-3 font-medium">
-                    {item.nama}
-                    {item.id === activeId ? (
-                      <span className="ml-2 text-[10px] font-semibold uppercase text-primary">
-                        Aktif
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
-                    {item.kelas}
-                  </td>
-                  <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
-                    {item.asrama}
-                  </td>
-                  <td className="px-3 py-3 text-center text-muted-foreground">{item.count}</td>
-                  <td className="px-3 py-3 text-center font-bold tabular-nums">{item.avg}</td>
+          <div className="px-5 pt-4 text-xs text-muted-foreground md:hidden">
+            Geser tabel ke samping untuk melihat detail lengkap.
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[640px] w-full text-sm">
+              <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="w-12 px-4 py-3 text-left">#</th>
+                  <th className="px-3 py-3 text-left">Nama</th>
+                  <th className="hidden px-3 py-3 text-left sm:table-cell">Kelas</th>
+                  <th className="hidden px-3 py-3 text-left md:table-cell">Asrama</th>
+                  <th className="px-3 py-3 text-center">Hari</th>
+                  <th className="px-3 py-3 text-center">Skor Rata-rata</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ranking.map((item, index) => (
+                  <tr
+                    key={item.id}
+                    className={
+                      "border-t border-border " + (item.id === activeId ? "bg-primary/5" : "")
+                    }
+                  >
+                    <td className="px-4 py-3 font-semibold text-muted-foreground">{index + 1}</td>
+                    <td className="px-3 py-3 font-medium">
+                      {item.nama}
+                      {item.id === activeId ? (
+                        <span className="ml-2 text-[10px] font-semibold uppercase text-primary">
+                          Aktif
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
+                      {item.kelas}
+                    </td>
+                    <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
+                      {item.asrama}
+                    </td>
+                    <td className="px-3 py-3 text-center text-muted-foreground">{item.count}</td>
+                    <td className="px-3 py-3 text-center font-bold tabular-nums">{item.avg}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </RoleGuard>

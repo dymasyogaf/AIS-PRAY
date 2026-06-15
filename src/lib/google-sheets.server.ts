@@ -14,15 +14,18 @@ interface SheetsProxyBody {
   payload?: unknown;
 }
 
-function getEnvValue(key: string): string {
-  const env = globalThis.process?.env as Record<string, string | undefined> | undefined;
-  return env?.[key]?.trim() ?? "";
+function getEnvValue(env: Record<string, unknown> | undefined, key: string): string {
+  if (env && typeof env === "object" && key in env && typeof (env as any)[key] === "string") {
+    return (env as any)[key].trim();
+  }
+  const processEnv = globalThis.process?.env as Record<string, string | undefined> | undefined;
+  return processEnv?.[key]?.trim() ?? "";
 }
 
-function getSheetsConfig() {
+function getSheetsConfig(env?: Record<string, unknown>) {
   return {
-    webhookUrl: getEnvValue("GOOGLE_SHEETS_WEBHOOK_URL") || DEFAULT_WEBHOOK_URL,
-    token: getEnvValue("GOOGLE_SHEETS_WEBHOOK_TOKEN"),
+    webhookUrl: getEnvValue(env, "GOOGLE_SHEETS_WEBHOOK_URL") || DEFAULT_WEBHOOK_URL,
+    token: getEnvValue(env, "GOOGLE_SHEETS_WEBHOOK_TOKEN"),
   };
 }
 
@@ -49,8 +52,8 @@ async function parseProxyBody(request: Request): Promise<SheetsProxyBody> {
   };
 }
 
-async function callSheetsWebhook(body: SheetsProxyBody) {
-  const { webhookUrl, token } = getSheetsConfig();
+async function callSheetsWebhook(body: SheetsProxyBody, env?: Record<string, unknown>) {
+  const { webhookUrl, token } = getSheetsConfig(env);
 
   if (!token) {
     return {
@@ -92,12 +95,18 @@ async function callSheetsWebhook(body: SheetsProxyBody) {
   };
 }
 
-export async function handleSheetsProxyRequest(request: Request): Promise<Response> {
+export async function handleSheetsProxyRequest(
+  request: Request,
+  env?: Record<string, unknown>
+): Promise<Response> {
   if (request.method === "GET") {
-    const result = await callSheetsWebhook({
-      action: "getAllData",
-      payload: {},
-    });
+    const result = await callSheetsWebhook(
+      {
+        action: "getAllData",
+        payload: {},
+      },
+      env
+    );
 
     if (!result.configured) {
       return jsonResponse({
@@ -120,7 +129,7 @@ export async function handleSheetsProxyRequest(request: Request): Promise<Respon
 
   try {
     const body = await parseProxyBody(request);
-    const result = await callSheetsWebhook(body);
+    const result = await callSheetsWebhook(body, env);
 
     if (!result.configured) {
       return jsonResponse({

@@ -72,7 +72,7 @@ export default {
     try {
       const { pathname } = new URL(request.url);
       if (pathname === "/api/sheets") {
-        return await handleSheetsProxyRequest(request);
+        return await handleSheetsProxyRequest(request, env as Record<string, unknown>);
       }
 
       const handler = await getServerEntry();

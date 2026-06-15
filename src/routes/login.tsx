@@ -238,7 +238,7 @@ function LoginPage() {
                   />
                   {needsSantriProfile ? (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      Profil dummy akan dibuat otomatis dan masuk ke binaan{" "}
+                      Profil akan dibuat otomatis dan masuk ke binaan{" "}
                       {registerRole === "santri" ? "musyrif" : "musyrifah"}.
                     </div>
                   ) : null}

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, RotateCcw } from "lucide-react";
+import { useMemo } from "react";
+
 import { RoleGuard } from "@/components/RoleGuard";
 import { filterSantriForRole, useAuth } from "@/lib/auth-store";
 import {
@@ -20,7 +20,7 @@ function ButuhPembinaanPage() {
   const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const pembinaan = useStore((store) => store.pembinaan);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
   const santri = useMemo(
     () => (session ? filterSantriForRole(session.role, allSantri) : []),
     [allSantri, session],
@@ -46,24 +46,7 @@ function ButuhPembinaanPage() {
     [entries, pembinaan, santri],
   );
 
-  useEffect(() => {
-    setDrafts((current) => {
-      const next = { ...current };
-      pembinaanList.forEach((item) => {
-        if (!(item.id in next)) {
-          next[item.id] = item.followUp?.catatan ?? "";
-        }
-      });
 
-      Object.keys(next).forEach((santriId) => {
-        if (!pembinaanList.some((item) => item.id === santriId)) {
-          delete next[santriId];
-        }
-      });
-
-      return next;
-    });
-  }, [pembinaanList]);
 
   const selesaiCount = pembinaanList.filter((item) => item.followUp?.selesai).length;
   const belumCount = pembinaanList.length - selesaiCount;
@@ -87,123 +70,70 @@ function ButuhPembinaanPage() {
         </div>
 
         {pembinaanList.length ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {pembinaanList.map((item) => {
-              const followUp = item.followUp;
-              const catatan = drafts[item.id] ?? "";
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="overflow-x-auto">
+              <table className="min-w-[640px] w-full text-sm">
+                <thead className="bg-secondary/60 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="w-12 px-4 py-3 text-left">#</th>
+                    <th className="px-3 py-3 text-left">Nama</th>
+                    <th className="px-3 py-3 text-left">Kelas</th>
+                    <th className="px-3 py-3 text-left">Asrama</th>
+                    <th className="px-3 py-3 text-center">Pembinaan</th>
+                    <th className="px-3 py-3 text-center">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pembinaanList.map((item, index) => {
+                    const followUp = item.followUp;
+                    const status = followUp?.selesai ? "Selesai" : (followUp?.catatan === "Proses" ? "Proses" : "Belum");
 
-              return (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{item.nama}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {item.kelas} - {item.asrama}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-danger/10 px-2.5 py-1 text-xs font-semibold text-danger">
-                        {item.pembinaanStreak}x berturut-turut
-                      </span>
-                      <span
-                        className={
-                          "rounded-full px-2.5 py-1 text-xs font-semibold " +
-                          (followUp?.selesai
-                            ? "bg-success/10 text-success"
-                            : "bg-warning/10 text-warning")
-                        }
-                      >
-                        {followUp?.selesai ? "Selesai" : "Belum selesai"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    <label className="block">
-                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Keterangan Pembinaan
-                      </div>
-                      <textarea
-                        value={catatan}
-                        onChange={(event) =>
-                          setDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                        }
-                        placeholder="Tulis catatan pembinaan santri ini..."
-                        className="min-h-28 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
-                      />
-                    </label>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updatePembinaanFollowUp(item.id, {
-                            catatan,
-                          })
-                        }
-                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition hover:bg-secondary"
-                      >
-                        <ClipboardList className="h-4 w-4" />
-                        Simpan Keterangan
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updatePembinaanFollowUp(item.id, {
-                            catatan,
-                            selesai: !followUp?.selesai,
-                          })
-                        }
-                        className={
-                          "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition " +
-                          (followUp?.selesai
-                            ? "border border-border bg-background hover:bg-secondary"
-                            : "bg-primary text-primary-foreground hover:opacity-90")
-                        }
-                      >
-                        {followUp?.selesai ? (
-                          <>
-                            <RotateCcw className="h-4 w-4" />
-                            Buka Lagi
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" />
-                            Tandai Selesai
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveSantri(item.id)}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition hover:bg-secondary"
-                      >
-                        Pilih Santri
-                      </button>
-
-                      <Link
-                        to="/rekap"
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition hover:bg-secondary"
-                      >
-                        Lihat Rekap
-                      </Link>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {followUp?.updatedAt
-                        ? `Terakhir diperbarui: ${new Date(followUp.updatedAt).toLocaleString("id-ID")}`
-                        : "Belum ada tindak lanjut yang disimpan."}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                    return (
+                      <tr key={item.id} className="border-t border-border hover:bg-secondary/20 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-muted-foreground">{index + 1}</td>
+                        <td className="px-3 py-3 font-medium">
+                          <Link 
+                            to="/rekap" 
+                            onClick={() => setActiveSantri(item.id)}
+                            className="hover:text-primary hover:underline transition-colors"
+                          >
+                            {item.nama}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3 text-muted-foreground">{item.kelas}</td>
+                        <td className="px-3 py-3 text-muted-foreground">{item.asrama}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="font-bold tabular-nums text-danger">
+                            {item.pembinaanStreak} Hari
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <select
+                            value={status}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updatePembinaanFollowUp(item.id, {
+                                catatan: val,
+                                selesai: val === "Selesai"
+                              });
+                            }}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold border-none outline-none cursor-pointer ${
+                              status === "Selesai" ? "bg-success/10 text-success" :
+                              status === "Proses" ? "bg-warning/10 text-warning" :
+                              "bg-danger/10 text-danger"
+                            }`}
+                          >
+                            <option value="Belum" className="text-black bg-background">Belum</option>
+                            <option value="Proses" className="text-black bg-background">Proses</option>
+                            <option value="Selesai" className="text-black bg-background">Selesai</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-border bg-card px-5 py-10 text-center">

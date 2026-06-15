@@ -3,7 +3,7 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, updateAccount } from "@/lib/auth-store";
-import { updateDummySantriProfile, useStore } from "@/lib/ibadah-store";
+import { updateSantriProfile, useStore } from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/profil")({
   component: ProfilPage,
@@ -52,7 +52,7 @@ function ProfilPage() {
       return;
     }
 
-    updateDummySantriProfile(activeSantri.id, {
+    updateSantriProfile(activeSantri.id, {
       kelas,
       asrama: asrama.trim(),
       jurusan: jurusan.trim(),

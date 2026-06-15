@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import {
-  createDummySantriProfile,
+  createSantriProfile,
   getActiveSantriIdValue,
   getSantriList,
   setActiveSantri,
@@ -35,55 +35,15 @@ interface SheetsApiResponse {
   data?: unknown;
 }
 
-const SESSION_STORAGE_KEY = "auth-session-v1";
-const ACCOUNT_STORAGE_KEY = "auth-accounts-v1";
+const SESSION_STORAGE_KEY = "auth-session-v2";
+const ACCOUNT_STORAGE_KEY = "auth-accounts-v2";
 const SHEETS_API_PATH = "/api/sheets";
 
-const DEMO_ACCOUNTS: AuthAccount[] = [
-  {
-    username: "musyrif",
-    password: "jadibaik",
-    session: {
-      username: "musyrif",
-      role: "musyrif",
-      displayName: "Musyrif Putra",
-    },
-  },
-  {
-    username: "musyrifah",
-    password: "jadibaik",
-    session: {
-      username: "musyrifah",
-      role: "musyrifah",
-      displayName: "Musyrifah Putri",
-    },
-  },
-  {
-    username: "santri",
-    password: "jadibaik",
-    session: {
-      username: "santri",
-      role: "santri",
-      displayName: "Ahmad Faiz Rahman",
-      santriId: "s1",
-    },
-  },
-  {
-    username: "santriwati",
-    password: "jadibaik",
-    session: {
-      username: "santriwati",
-      role: "santriwati",
-      displayName: "Aisyah Zahra",
-      santriId: "s5",
-    },
-  },
-];
+// Dummy accounts removed
 
 let state: AuthState = { isReady: false, session: null };
 let initialized = false;
 let accountsHydrationStarted = false;
-let demoSeedStarted = false;
 const listeners = new Set<() => void>();
 
 function normalizeUsername(username: string) {
@@ -143,16 +103,16 @@ function normalizeRemoteAccounts(input: unknown): AuthAccount[] {
 }
 
 function readAccounts() {
-  if (typeof window === "undefined") return DEMO_ACCOUNTS;
+  if (typeof window === "undefined") return [] as AuthAccount[];
 
   try {
     const raw = localStorage.getItem(ACCOUNT_STORAGE_KEY);
-    if (!raw) return DEMO_ACCOUNTS;
+    if (!raw) return [] as AuthAccount[];
     const parsed = JSON.parse(raw) as unknown[];
     const accounts = parsed.filter(isAuthAccount);
-    return accounts.length ? accounts : DEMO_ACCOUNTS;
+    return accounts;
   } catch {
-    return DEMO_ACCOUNTS;
+    return [] as AuthAccount[];
   }
 }
 
@@ -244,51 +204,15 @@ async function fetchRemoteAccounts() {
   };
 }
 
-async function seedDemoAccountsToSheets() {
-  if (demoSeedStarted) return { ok: true as const };
-
-  demoSeedStarted = true;
-  for (const account of DEMO_ACCOUNTS) {
-    const result = await upsertUserToSheets(account);
-    if (!result.ok) {
-      demoSeedStarted = false;
-      return result;
-    }
-  }
-
-  return { ok: true as const };
-}
+// seedDemoAccountsToSheets removed
 
 async function loadAccountsFromSource() {
   const remote = await fetchRemoteAccounts();
 
   if (!remote.ok) return remote;
 
-  if (!remote.configured) {
-    persistAccounts(remote.accounts);
-    return remote;
-  }
-
-  if (remote.accounts.length > 0) {
-    persistAccounts(remote.accounts);
-    return remote;
-  }
-
-  const seedResult = await seedDemoAccountsToSheets();
-  if (!seedResult.ok) {
-    return {
-      ok: false as const,
-      message: seedResult.message,
-      configured: seedResult.configured !== false,
-      accounts: [] as AuthAccount[],
-    };
-  }
-
-  const seededRemote = await fetchRemoteAccounts();
-  if (!seededRemote.ok) return seededRemote;
-
-  persistAccounts(seededRemote.accounts);
-  return seededRemote;
+  persistAccounts(remote.accounts);
+  return remote;
 }
 
 async function hydrateAccountsFromSheets() {
@@ -502,11 +426,11 @@ export async function registerAccount(input: {
     if (existingProfile) {
       return {
         ok: false as const,
-        message: "Nama santri ini sudah ada. Gunakan nama lain untuk dummy profile.",
+        message: "Nama santri ini sudah ada. Gunakan nama lain untuk profile ini.",
       };
     }
 
-    const santri = createDummySantriProfile({
+    const santri = createSantriProfile({
       nama: displayName,
       gender: genderForRole(input.role),
       supervisorRole: supervisorRoleForStudentRole(input.role),
@@ -624,29 +548,3 @@ export function canAccessRole(role: UserRole, allowedRoles: UserRole[]) {
   return allowedRoles.includes(role);
 }
 
-export const authDemoAccounts = [
-  {
-    role: "Musyrif",
-    username: "musyrif",
-    password: "jadibaik",
-    access: "Dashboard putra, rekap, ranking, daftar santri putra",
-  },
-  {
-    role: "Musyrifah",
-    username: "musyrifah",
-    password: "jadibaik",
-    access: "Dashboard putri, rekap, ranking, daftar santriwati",
-  },
-  {
-    role: "Santri",
-    username: "santri",
-    password: "jadibaik",
-    access: "Dashboard pribadi putra, rekap pribadi, dan input ibadah",
-  },
-  {
-    role: "Santriwati",
-    username: "santriwati",
-    password: "jadibaik",
-    access: "Dashboard pribadi putri, rekap pribadi, dan input ibadah",
-  },
-] as const;

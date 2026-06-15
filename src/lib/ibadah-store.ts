@@ -34,7 +34,7 @@ export interface Santri {
   asrama: string;
   gender: SantriGender;
   supervisorRole: SupervisorRole;
-  profileType?: "default" | "dummy";
+  profileType?: "default" | "custom";
   jurusan?: string;
 }
 
@@ -46,11 +46,11 @@ export interface PembinaanFollowUp {
   selesaiAt: string | null;
 }
 
-const STORAGE_KEY = "ibadah-data-v1";
-const SANTRI_KEY = "santri-data-v1";
-const ACTIVE_KEY = "active-santri-v1";
-const SYNC_CHANNEL = "ibadah-sync-v1";
-const PEMBINAAN_KEY = "pembinaan-data-v1";
+const STORAGE_KEY = "ibadah-data-v2";
+const SANTRI_KEY = "santri-data-v2";
+const ACTIVE_KEY = "active-santri-v2";
+const SYNC_CHANNEL = "ibadah-sync-v2";
+const PEMBINAAN_KEY = "pembinaan-data-v2";
 const SYNC_POLL_MS = 1000;
 const SHEETS_API_PATH = "/api/sheets";
 const REMOTE_SYNC_COOLDOWN_MS = 1200;
@@ -62,22 +62,7 @@ interface Store {
   pembinaan: Record<string, PembinaanFollowUp>;
 }
 
-const DEFAULT_SANTRI_BASE: Array<Omit<Santri, "supervisorRole" | "profileType">> = [
-  { id: "s1", nama: "Ahmad Faiz Rahman", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
-  { id: "s2", nama: "Muhammad Hafidz", kelas: "X-A", asrama: "Al-Furqan", gender: "putra" },
-  { id: "s3", nama: "Yusuf Abdurrahman", kelas: "X-B", asrama: "Al-Hikmah", gender: "putra" },
-  { id: "s4", nama: "Bilal Ar-Rasyid", kelas: "XI-A", asrama: "Al-Furqan", gender: "putra" },
-  { id: "s5", nama: "Aisyah Zahra", kelas: "X-A", asrama: "An-Nisa", gender: "putri" },
-  { id: "s6", nama: "Khadijah Humaira", kelas: "X-B", asrama: "An-Nisa", gender: "putri" },
-  { id: "s7", nama: "Maryam Safitri", kelas: "XI-A", asrama: "Al-Hikmah Putri", gender: "putri" },
-  { id: "s8", nama: "Safiyya Nabila", kelas: "XII-A", asrama: "Al-Hikmah Putri", gender: "putri" },
-];
-
-const DEFAULT_SANTRI: Santri[] = DEFAULT_SANTRI_BASE.map((item) => ({
-  ...item,
-  supervisorRole: item.gender === "putra" ? "musyrif" : "musyrifah",
-  profileType: "default" as const,
-}));
+// Dummy santri removed
 
 function normalizeSantri(
   input: Array<
@@ -86,7 +71,7 @@ function normalizeSantri(
       santriId?: string;
       gender?: SantriGender;
       supervisorRole?: SupervisorRole;
-      profileType?: "default" | "dummy";
+      profileType?: "default" | "custom";
     }
   >,
 ) {
@@ -94,8 +79,7 @@ function normalizeSantri(
     const id = item.id ?? item.santriId ?? "";
     if (!id) return santriList;
 
-    const fallback = DEFAULT_SANTRI.find((santri) => santri.id === id);
-    const gender = item.gender ?? fallback?.gender ?? "putra";
+    const gender = item.gender ?? "putra";
 
     santriList.push({
       id,
@@ -105,9 +89,8 @@ function normalizeSantri(
       gender,
       supervisorRole:
         item.supervisorRole ??
-        fallback?.supervisorRole ??
         (gender === "putra" ? "musyrif" : "musyrifah"),
-      profileType: item.profileType ?? fallback?.profileType ?? "default",
+      profileType: item.profileType ?? "default",
     });
 
     return santriList;
@@ -121,7 +104,7 @@ function formatDateLocal(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-let store: Store = { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
+let store: Store = { entries: [], santri: [], activeSantriId: "s1", pembinaan: {} };
 let initialized = false;
 let syncBound = false;
 let syncChannel: BroadcastChannel | null = null;
@@ -204,7 +187,7 @@ function readEntriesRaw() {
 }
 
 function readSantri() {
-  if (typeof window === "undefined") return DEFAULT_SANTRI;
+  if (typeof window === "undefined") return [] as Santri[];
   try {
     const raw = readSantriRaw();
     if (raw)
@@ -213,14 +196,13 @@ function readSantri() {
           Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
             gender?: SantriGender;
             supervisorRole?: SupervisorRole;
-            profileType?: "default" | "dummy";
+            profileType?: "default" | "custom";
           }
         >,
       );
-    localStorage.setItem(SANTRI_KEY, JSON.stringify(DEFAULT_SANTRI));
-    return DEFAULT_SANTRI;
+    return [] as Santri[];
   } catch {
-    return DEFAULT_SANTRI;
+    return [] as Santri[];
   }
 }
 
@@ -234,7 +216,7 @@ function readPembinaan() {
 }
 
 function readSantriRaw() {
-  if (typeof window === "undefined") return JSON.stringify(DEFAULT_SANTRI);
+  if (typeof window === "undefined") return "[]";
   try {
     return localStorage.getItem(SANTRI_KEY) || "";
   } catch {
@@ -274,18 +256,13 @@ function getSnapshot() {
 
 function loadStore(): Store {
   if (typeof window === "undefined") {
-    return { entries: [], santri: DEFAULT_SANTRI, activeSantriId: "s1", pembinaan: {} };
+    return { entries: [], santri: [], activeSantriId: "s1", pembinaan: {} };
   }
 
-  let entries = readEntries();
+  const entries = readEntries();
   const santri = readSantri();
   const activeSantriId = getActiveSantriId();
   const pembinaan = readPembinaan();
-
-  if (entries.length === 0) {
-    entries = seedEntries(santri);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  }
 
   rememberSnapshot(readEntriesRaw(), readSantriRaw(), activeSantriId, readPembinaanRaw());
   return { entries, santri, activeSantriId, pembinaan };
@@ -312,11 +289,11 @@ function refreshSharedState() {
             Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
               gender?: SantriGender;
               supervisorRole?: SupervisorRole;
-              profileType?: "default" | "dummy";
+              profileType?: "default" | "custom";
             }
           >,
         )
-      : DEFAULT_SANTRI,
+      : ([] as Santri[]),
     activeSantriId: nextSnapshot.activeSantriId,
     pembinaan: JSON.parse(nextSnapshot.pembinaanRaw || "{}") as Record<string, PembinaanFollowUp>,
   };
@@ -465,46 +442,7 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-function seedEntries(santri: Santri[]): IbadahEntry[] {
-  const out: IbadahEntry[] = [];
-  const today = new Date();
-
-  for (let d = 29; d >= 0; d--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - d);
-    const dateString = formatDateLocal(date);
-
-    santri.forEach((item, idx) => {
-      const seed = (d * 7 + idx * 13) % 100;
-      const rand = (min: number, max: number) => min + ((seed * (idx + 1)) % (max - min + 1));
-      const sholatStatuses: SholatStatus[] = ["ontime", "ontime", "ontime", "late", "miss"];
-      const sholat = Object.fromEntries(
-        SHOLAT_KEYS.map((key, i) => [key, sholatStatuses[(seed + i) % 5]]),
-      ) as Record<SholatKey, SholatStatus>;
-
-      out.push({
-        date: dateString,
-        santriId: item.id,
-        sholat,
-        tilawahMenit: rand(10, 60),
-        tilawahHalaman: rand(1, 8),
-        tahfidzBaru: idx % 3 === 0 ? rand(0, 2) : 0,
-        tahfidzMurajaah: rand(1, 5),
-        qiyamRakaat: seed % 3 === 0 ? 0 : rand(2, 8),
-        puasa: seed % 7 === 0,
-        adab: ((seed + idx) % 5) + 1,
-        catatan: "",
-        catatanPembina: {
-          text: "",
-          updatedAt: null,
-          readAt: null,
-        },
-      });
-    });
-  }
-
-  return out;
-}
+// seedEntries removed
 
 export function useStore<T>(selector: (s: Store) => T): T {
   ensureInit();
@@ -580,7 +518,7 @@ export function updatePembinaanFollowUp(
   void syncPembinaanToSheets(pembinaan);
 }
 
-export function createDummySantriProfile(input: {
+export function createSantriProfile(input: {
   nama: string;
   gender: SantriGender;
   supervisorRole: SupervisorRole;
@@ -598,7 +536,7 @@ export function createDummySantriProfile(input: {
     kelas: input.kelas,
     asrama: input.asrama,
     supervisorRole: input.supervisorRole,
-    profileType: "dummy",
+    profileType: "custom",
     jurusan: input.jurusan,
   };
 
@@ -615,7 +553,7 @@ export function createDummySantriProfile(input: {
   return profile;
 }
 
-export function updateDummySantriProfile(
+export function updateSantriProfile(
   id: string,
   input: {
     kelas?: string;
@@ -954,7 +892,7 @@ async function hydrateStoreFromSheets() {
     Omit<Santri, "gender" | "supervisorRole" | "profileType"> & {
       gender?: SantriGender;
       supervisorRole?: SupervisorRole;
-      profileType?: "default" | "dummy";
+      profileType?: "default" | "custom";
     }
   >;
   const remoteEntryRows = [
@@ -966,9 +904,7 @@ async function hydrateStoreFromSheets() {
     ...(response.data.pembinaanPutri ?? []),
   ] as Array<Record<string, unknown>>;
 
-  if (remoteSantriRows.length === 0) {
-    void seedSantriSheetsFromLocalStore();
-  }
+
 
   const remoteSantri = remoteSantriRows.length ? normalizeSantri(remoteSantriRows) : [];
   const remoteEntries = remoteEntryRows.length ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry)) : [];
@@ -1019,14 +955,7 @@ async function hydrateStoreFromSheets() {
   broadcastSync();
 }
 
-async function seedSantriSheetsFromLocalStore() {
-  if (remoteSantriSeedStarted) return;
-  remoteSantriSeedStarted = true;
-
-  for (const santri of store.santri) {
-    await syncSantriToSheets(santri);
-  }
-}
+// seedSantriSheetsFromLocalStore removed
 
 async function syncSantriToSheets(santri: Santri) {
   const response = await postSheetsAction("upsertSantri", {

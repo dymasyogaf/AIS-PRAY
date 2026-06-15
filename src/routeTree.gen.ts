@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSantriRouteImport } from './routes/_app.santri'
 import { Route as AppRekapRouteImport } from './routes/_app.rekap'
 import { Route as AppRankingRouteImport } from './routes/_app.ranking'
+import { Route as AppProfilRouteImport } from './routes/_app.profil'
 import { Route as AppInputRouteImport } from './routes/_app.input'
 import { Route as AppButuhPembinaanRouteImport } from './routes/_app.butuh-pembinaan'
 
@@ -47,6 +48,11 @@ const AppRankingRoute = AppRankingRouteImport.update({
   path: '/ranking',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfilRoute = AppProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInputRoute = AppInputRouteImport.update({
   id: '/input',
   path: '/input',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/butuh-pembinaan': typeof AppButuhPembinaanRoute
   '/input': typeof AppInputRoute
+  '/profil': typeof AppProfilRoute
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
   '/santri': typeof AppSantriRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/butuh-pembinaan': typeof AppButuhPembinaanRoute
   '/input': typeof AppInputRoute
+  '/profil': typeof AppProfilRoute
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
   '/santri': typeof AppSantriRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/butuh-pembinaan': typeof AppButuhPembinaanRoute
   '/_app/input': typeof AppInputRoute
+  '/_app/profil': typeof AppProfilRoute
   '/_app/ranking': typeof AppRankingRoute
   '/_app/rekap': typeof AppRekapRoute
   '/_app/santri': typeof AppSantriRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/butuh-pembinaan'
     | '/input'
+    | '/profil'
     | '/ranking'
     | '/rekap'
     | '/santri'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/butuh-pembinaan'
     | '/input'
+    | '/profil'
     | '/ranking'
     | '/rekap'
     | '/santri'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/butuh-pembinaan'
     | '/_app/input'
+    | '/_app/profil'
     | '/_app/ranking'
     | '/_app/rekap'
     | '/_app/santri'
@@ -167,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRankingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profil': {
+      id: '/_app/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof AppProfilRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/input': {
       id: '/_app/input'
       path: '/input'
@@ -187,6 +206,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppButuhPembinaanRoute: typeof AppButuhPembinaanRoute
   AppInputRoute: typeof AppInputRoute
+  AppProfilRoute: typeof AppProfilRoute
   AppRankingRoute: typeof AppRankingRoute
   AppRekapRoute: typeof AppRekapRoute
   AppSantriRoute: typeof AppSantriRoute
@@ -196,6 +216,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppButuhPembinaanRoute: AppButuhPembinaanRoute,
   AppInputRoute: AppInputRoute,
+  AppProfilRoute: AppProfilRoute,
   AppRankingRoute: AppRankingRoute,
   AppRekapRoute: AppRekapRoute,
   AppSantriRoute: AppSantriRoute,

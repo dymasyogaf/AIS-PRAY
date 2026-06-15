@@ -9,6 +9,7 @@ import {
   PencilLine,
   Trophy,
   Users,
+  User,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -52,6 +53,13 @@ const nav = [
     mobileLabel: "Rekap",
     icon: BarChart3,
     roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
+  },
+  {
+    to: "/profil",
+    label: "Profil",
+    mobileLabel: "Profil",
+    icon: User,
+    roles: ["santri", "santriwati"] as UserRole[],
   },
   {
     to: "/ranking",

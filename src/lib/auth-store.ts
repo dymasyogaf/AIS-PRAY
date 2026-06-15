@@ -451,6 +451,7 @@ export async function registerAccount(input: {
   password: string;
   displayName?: string;
   kelas?: string;
+  asrama?: string;
 }) {
   ensureInit();
 
@@ -490,6 +491,10 @@ export async function registerAccount(input: {
       return { ok: false as const, message: "Kelas wajib dipilih." };
     }
 
+    if (!input.asrama?.trim()) {
+      return { ok: false as const, message: "Asrama wajib diisi." };
+    }
+
     const existingProfile = filterSantriForRole(input.role, getSantriList()).find(
       (item) => item.nama.trim().toLowerCase() === displayName.toLowerCase(),
     );
@@ -506,6 +511,7 @@ export async function registerAccount(input: {
       gender: genderForRole(input.role),
       supervisorRole: supervisorRoleForStudentRole(input.role),
       kelas: input.kelas,
+      asrama: input.asrama.trim(),
     });
 
     session.displayName = santri.nama;
@@ -535,6 +541,74 @@ export async function registerAccount(input: {
   persistSession(state.session);
   syncRoleState(state.session);
   emit();
+
+  return { ok: true as const };
+}
+
+export async function updateAccount(
+  currentUsername: string,
+  input: {
+    username?: string;
+    password?: string;
+  },
+) {
+  ensureInit();
+
+  const source = await loadAccountsFromSource();
+  if (!source.ok) {
+    return { ok: false as const, message: source.message };
+  }
+
+  const index = source.accounts.findIndex((acc) => acc.username === currentUsername);
+  if (index === -1) {
+    return { ok: false as const, message: "Akun tidak ditemukan." };
+  }
+
+  let nextUsername = currentUsername;
+  if (input.username && input.username !== currentUsername) {
+    const normalizedNew = normalizeUsername(input.username);
+    if (source.accounts.some((acc) => acc.username === normalizedNew)) {
+      return { ok: false as const, message: "Username sudah digunakan." };
+    }
+    nextUsername = normalizedNew;
+  }
+
+  const account = source.accounts[index];
+  if (input.password && input.password.length < 6) {
+    return { ok: false as const, message: "Password minimal 6 karakter." };
+  }
+
+  const updatedAccount: AuthAccount = {
+    ...account,
+    username: nextUsername,
+    password: input.password ? input.password.trim() : account.password,
+    session: {
+      ...account.session,
+      username: nextUsername,
+    },
+  };
+
+  source.accounts[index] = updatedAccount;
+
+  const saveResult = await upsertUserToSheets(updatedAccount);
+  if (!saveResult.ok) {
+    return {
+      ok: false as const,
+      message: "Gagal menyimpan perubahan ke server. " + saveResult.message,
+    };
+  }
+
+  if (state.session?.username === currentUsername) {
+    state = {
+      ...state,
+      session: {
+        ...state.session,
+        username: nextUsername,
+      },
+    };
+    persistSession(state.session);
+    emit();
+  }
 
   return { ok: true as const };
 }

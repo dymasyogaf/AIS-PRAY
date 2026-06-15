@@ -35,6 +35,7 @@ export interface Santri {
   gender: SantriGender;
   supervisorRole: SupervisorRole;
   profileType?: "default" | "dummy";
+  jurusan?: string;
 }
 
 export interface PembinaanFollowUp {
@@ -584,6 +585,8 @@ export function createDummySantriProfile(input: {
   gender: SantriGender;
   supervisorRole: SupervisorRole;
   kelas: string;
+  asrama: string;
+  jurusan?: string;
 }) {
   ensureInit();
 
@@ -593,21 +596,58 @@ export function createDummySantriProfile(input: {
     nama: input.nama.trim(),
     gender: input.gender,
     kelas: input.kelas,
-    asrama: input.gender === "putra" ? "Binaan Musyrif" : "Binaan Musyrifah",
+    asrama: input.asrama,
     supervisorRole: input.supervisorRole,
     profileType: "dummy",
+    jurusan: input.jurusan,
   };
 
   store = {
     ...store,
     santri: [...store.santri, profile],
   };
+
   persist();
   emit();
   broadcastSync();
   void syncSantriToSheets(profile);
 
   return profile;
+}
+
+export function updateDummySantriProfile(
+  id: string,
+  input: {
+    kelas?: string;
+    asrama?: string;
+    jurusan?: string;
+  },
+) {
+  ensureInit();
+
+  const index = store.santri.findIndex((s) => s.id === id);
+  if (index === -1) return;
+
+  const current = store.santri[index];
+  const updatedProfile: Santri = {
+    ...current,
+    kelas: input.kelas ?? current.kelas,
+    asrama: input.asrama ?? current.asrama,
+    jurusan: input.jurusan ?? current.jurusan,
+  };
+
+  const nextSantri = [...store.santri];
+  nextSantri[index] = updatedProfile;
+
+  store = {
+    ...store,
+    santri: nextSantri,
+  };
+
+  persist();
+  emit();
+  broadcastSync();
+  void syncSantriToSheets(updatedProfile);
 }
 
 export function getSantriList() {
@@ -824,9 +864,17 @@ function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseRemoteDate(dateStr: string) {
+  if (!dateStr) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return dateStr.trim();
+  const date = new Date(dateStr);
+  if (!isNaN(date.getTime())) return formatDateLocal(date);
+  return dateStr;
+}
+
 function normalizeRemoteEntry(row: Record<string, unknown>): Partial<IbadahEntry> {
   return {
-    date: String(row.date ?? ""),
+    date: parseRemoteDate(String(row.date ?? "")),
     santriId: String(row.santriId ?? ""),
     sholat: {
       subuh: (row.subuh as SholatStatus | undefined) ?? "miss",
@@ -922,15 +970,34 @@ async function hydrateStoreFromSheets() {
     void seedSantriSheetsFromLocalStore();
   }
 
+  const remoteSantri = remoteSantriRows.length ? normalizeSantri(remoteSantriRows) : [];
+  const remoteEntries = remoteEntryRows.length ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry)) : [];
+  const remotePembinaan = remotePembinaanRows.length ? normalizeRemotePembinaan(remotePembinaanRows) : {};
+
+  const mergedSantri = [...store.santri];
+  for (const rs of remoteSantri) {
+    const idx = mergedSantri.findIndex((s) => s.id === rs.id);
+    if (idx >= 0) mergedSantri[idx] = rs;
+    else mergedSantri.push(rs);
+  }
+
+  const mergedEntries = [...store.entries];
+  for (const re of remoteEntries) {
+    const idx = mergedEntries.findIndex((e) => e.date === re.date && e.santriId === re.santriId);
+    if (idx >= 0) mergedEntries[idx] = re;
+    else mergedEntries.push(re);
+  }
+
+  const mergedPembinaan = { ...store.pembinaan };
+  for (const [id, pb] of Object.entries(remotePembinaan)) {
+    mergedPembinaan[id] = pb;
+  }
+
   const nextStore: Store = {
     ...store,
-    santri: remoteSantriRows.length ? normalizeSantri(remoteSantriRows) : store.santri,
-    entries: remoteEntryRows.length
-      ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry))
-      : store.entries,
-    pembinaan: remotePembinaanRows.length
-      ? normalizeRemotePembinaan(remotePembinaanRows)
-      : store.pembinaan,
+    santri: remoteSantri.length ? mergedSantri : store.santri,
+    entries: remoteEntries.length ? mergedEntries : store.entries,
+    pembinaan: Object.keys(remotePembinaan).length ? mergedPembinaan : store.pembinaan,
     activeSantriId: store.activeSantriId,
   };
 

@@ -2,7 +2,6 @@ import { FormEvent, useState } from "react";
 import { Navigate, createFileRoute } from "@tanstack/react-router";
 import { LockKeyhole, Moon, ShieldCheck, UserPlus2 } from "lucide-react";
 import {
-  authDemoAccounts,
   isStudentRole,
   login,
   registerAccount,
@@ -30,6 +29,7 @@ function LoginPage() {
   const [registerRole, setRegisterRole] = useState<UserRole>("musyrif");
   const [registerName, setRegisterName] = useState("");
   const [registerKelas, setRegisterKelas] = useState<(typeof kelasOptions)[number]>("X");
+  const [registerAsrama, setRegisterAsrama] = useState("");
   const [registerUsername, setRegisterUsername] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -82,6 +82,7 @@ function LoginPage() {
       role: registerRole,
       displayName: registerName,
       kelas: needsSantriProfile ? registerKelas : undefined,
+      asrama: needsSantriProfile ? registerAsrama : undefined,
       username: registerUsername,
       password: registerPassword,
     });
@@ -112,35 +113,12 @@ function LoginPage() {
             </div>
             <div>
               <h1 className="max-w-xl text-4xl font-bold tracking-tight sm:text-5xl">
-                Login atau daftar sesuai peran pembina dan santri.
+                Selamat Datang
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Musyrif hanya mengakses santri putra, musyrifah hanya mengakses santriwati. Santri
-                dan santriwati hanya melihat data pribadinya masing-masing.
+                Sistem Monitoring Ibadah Santri
               </p>
             </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {authDemoAccounts.map((account) => (
-              <div
-                key={account.username}
-                className="rounded-3xl border border-border bg-card/90 p-5 shadow-sm backdrop-blur"
-              >
-                <div className="text-sm font-semibold">{account.role}</div>
-                <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                  <div>
-                    Username:{" "}
-                    <span className="font-medium text-foreground">{account.username}</span>
-                  </div>
-                  <div>
-                    Password:{" "}
-                    <span className="font-medium text-foreground">{account.password}</span>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">{account.access}</p>
-              </div>
-            ))}
           </div>
         </section>
 
@@ -184,10 +162,7 @@ function LoginPage() {
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-primary">
                   <LockKeyhole className="h-5 w-5" />
                 </div>
-                <h2 className="mt-4 text-2xl font-bold tracking-tight">Masuk ke aplikasi</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Gunakan akun demo atau akun yang tersimpan pada database Google Sheet.
-                </p>
+                <h2 className="mt-4 text-2xl font-bold tracking-tight">Login</h2>
               </div>
 
               <form className="space-y-4" onSubmit={onSubmit}>
@@ -234,10 +209,7 @@ function LoginPage() {
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-primary">
                   <UserPlus2 className="h-5 w-5" />
                 </div>
-                <h2 className="mt-4 text-2xl font-bold tracking-tight">Daftar akun baru</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Akun baru disimpan ke database Google Sheet dan langsung aktif setelah daftar.
-                </p>
+                <h2 className="mt-4 text-2xl font-bold tracking-tight">Daftar Akun</h2>
               </div>
 
               <form className="space-y-4" onSubmit={onRegister}>
@@ -273,22 +245,35 @@ function LoginPage() {
                 </label>
 
                 {needsSantriProfile ? (
-                  <label className="block">
-                    <span className="text-sm font-medium">Kelas</span>
-                    <select
-                      value={registerKelas}
-                      onChange={(event) =>
-                        setRegisterKelas(event.target.value as (typeof kelasOptions)[number])
-                      }
-                      className="mt-2 w-full rounded-2xl border border-input bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    >
-                      {kelasOptions.map((kelas) => (
-                        <option key={kelas} value={kelas}>
-                          {kelas}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <>
+                    <label className="block">
+                      <span className="text-sm font-medium">Kelas</span>
+                      <select
+                        value={registerKelas}
+                        onChange={(event) =>
+                          setRegisterKelas(event.target.value as (typeof kelasOptions)[number])
+                        }
+                        className="mt-2 w-full rounded-2xl border border-input bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      >
+                        {kelasOptions.map((kelas) => (
+                          <option key={kelas} value={kelas}>
+                            {kelas}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-sm font-medium">Asrama</span>
+                      <input
+                        type="text"
+                        value={registerAsrama}
+                        onChange={(event) => setRegisterAsrama(event.target.value)}
+                        placeholder="Nama asrama (misal: Alfatihah Pusat)"
+                        className="mt-2 w-full rounded-2xl border border-input bg-background px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      />
+                    </label>
+                  </>
                 ) : null}
 
                 <label className="block">

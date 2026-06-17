@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   BarChart3,
+  BookOpen,
   Flame,
   LayoutDashboard,
   LogOut,
@@ -60,6 +61,13 @@ const nav = [
     mobileLabel: "Profil",
     icon: User,
     roles: ["santri", "santriwati"] as UserRole[],
+  },
+  {
+    to: "/setoran",
+    label: "Data Setoran",
+    mobileLabel: "Setoran",
+    icon: BookOpen,
+    roles: ["musyrif", "musyrifah"] as UserRole[],
   },
   {
     to: "/ranking",

@@ -97,7 +97,7 @@ async function callSheetsWebhook(body: SheetsProxyBody, env?: Record<string, unk
 
 export async function handleSheetsProxyRequest(
   request: Request,
-  env?: Record<string, unknown>
+  env?: Record<string, unknown>,
 ): Promise<Response> {
   if (request.method === "GET") {
     const result = await callSheetsWebhook(
@@ -105,7 +105,7 @@ export async function handleSheetsProxyRequest(
         action: "getAllData",
         payload: {},
       },
-      env
+      env,
     );
 
     if (!result.configured) {

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Award, Medal, Trophy } from "lucide-react";
 import { RoleGuard } from "@/components/RoleGuard";
-import { filterSantriForRole, useAuth } from "@/lib/auth-store";
+import { filterSantriForRole, getSantriLabel, useAuth } from "@/lib/auth-store";
 import { lastNDates, scoreEntry, useStore } from "@/lib/ibadah-store";
 
 export const Route = createFileRoute("/_app/ranking")({
@@ -17,11 +17,20 @@ function RankingPage() {
   const activeId = useStore((store) => store.activeSantriId);
   const [range, setRange] = useState<7 | 30>(30);
   const [asrama, setAsrama] = useState<string>("all");
-  const santri = useMemo(
-    () => (session ? filterSantriForRole(session.role, allSantri) : []),
-    [allSantri, session],
-  );
-  const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
+  const [genderFilter, setGenderFilter] = useState<"semua" | "putra" | "putri">("semua");
+  const santri = useMemo(() => {
+    if (!session) return [];
+    let list = filterSantriForRole(session.role, allSantri);
+    if (session.role === "admin" && genderFilter !== "semua") {
+      list = list.filter((item) => item.gender === genderFilter);
+    }
+    return list;
+  }, [allSantri, session, genderFilter]);
+  const labelRaw = session ? getSantriLabel(session.role) : "santri";
+  const santriLabel = labelRaw
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 
   const asramaList = Array.from(new Set(santri.map((item) => item.asrama)));
 
@@ -48,15 +57,25 @@ function RankingPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Ranking {santriLabel === "santriwati" ? "Santriwati" : "Santri"}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Ranking {santriLabel}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Diurutkan berdasarkan rata-rata skor harian.
             </p>
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {session?.role === "admin" && (
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value as "semua" | "putra" | "putri")}
+                className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm sm:w-auto"
+              >
+                <option value="semua">Semua (Putra & Putri)</option>
+                <option value="putra">Santri (Putra)</option>
+                <option value="putri">Santriwati (Putri)</option>
+              </select>
+            )}
+
             <select
               value={asrama}
               onChange={(event) => setAsrama(event.target.value)}

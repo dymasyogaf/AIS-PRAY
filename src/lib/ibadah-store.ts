@@ -87,9 +87,7 @@ function normalizeSantri(
       kelas: item.kelas,
       asrama: item.asrama,
       gender,
-      supervisorRole:
-        item.supervisorRole ??
-        (gender === "putra" ? "musyrif" : "musyrifah"),
+      supervisorRole: item.supervisorRole ?? (gender === "putra" ? "musyrif" : "musyrifah"),
       profileType: item.profileType ?? "default",
     });
 
@@ -110,7 +108,8 @@ let syncBound = false;
 let syncChannel: BroadcastChannel | null = null;
 let syncInterval: number | null = null;
 let remoteHydrationStarted = false;
-let remoteSantriSeedStarted = false;
+
+const remoteSantriSeedStarted = false;
 let remoteHydrationInFlight = false;
 let lastRemoteHydrationAt = 0;
 let lastKnownRouteKey = "";
@@ -904,11 +903,13 @@ async function hydrateStoreFromSheets() {
     ...(response.data.pembinaanPutri ?? []),
   ] as Array<Record<string, unknown>>;
 
-
-
   const remoteSantri = remoteSantriRows.length ? normalizeSantri(remoteSantriRows) : [];
-  const remoteEntries = remoteEntryRows.length ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry)) : [];
-  const remotePembinaan = remotePembinaanRows.length ? normalizeRemotePembinaan(remotePembinaanRows) : {};
+  const remoteEntries = remoteEntryRows.length
+    ? normalizeEntries(remoteEntryRows.map(normalizeRemoteEntry))
+    : [];
+  const remotePembinaan = remotePembinaanRows.length
+    ? normalizeRemotePembinaan(remotePembinaanRows)
+    : {};
 
   const mergedSantri = [...store.santri];
   for (const rs of remoteSantri) {

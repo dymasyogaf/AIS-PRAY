@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { RoleGuard } from "@/components/RoleGuard";
-import { filterSantriForRole, useAuth } from "@/lib/auth-store";
+import { filterSantriForRole, getSantriLabel, useAuth } from "@/lib/auth-store";
 import {
   setActiveSantri,
   updatePembinaanFollowUp,
@@ -21,11 +21,16 @@ function ButuhPembinaanPage() {
   const entries = useStore((store) => store.entries);
   const pembinaan = useStore((store) => store.pembinaan);
 
-  const santri = useMemo(
-    () => (session ? filterSantriForRole(session.role, allSantri) : []),
-    [allSantri, session],
-  );
-  const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
+  const [genderFilter, setGenderFilter] = useState<"semua" | "putra" | "putri">("semua");
+  const santri = useMemo(() => {
+    if (!session) return [];
+    let list = filterSantriForRole(session.role, allSantri);
+    if (session.role === "admin" && genderFilter !== "semua") {
+      list = list.filter((item) => item.gender === genderFilter);
+    }
+    return list;
+  }, [allSantri, session, genderFilter]);
+  const santriLabel = session ? getSantriLabel(session.role) : "santri";
 
   const pembinaanList = useMemo(
     () =>
@@ -46,20 +51,33 @@ function ButuhPembinaanPage() {
     [entries, pembinaan, santri],
   );
 
-
-
   const selesaiCount = pembinaanList.filter((item) => item.followUp?.selesai).length;
   const belumCount = pembinaanList.length - selesaiCount;
 
   return (
     <RoleGuard allowedRoles={["musyrif", "musyrifah"]}>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Butuh Pembinaan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pantau {santriLabel} yang sedang perlu pembinaan 3 kali berturut-turut dan tandai tindak
-            lanjutnya.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Butuh Pembinaan</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pantau {santriLabel} yang sedang perlu pembinaan 3 kali berturut-turut dan tandai
+              tindak lanjutnya.
+            </p>
+          </div>
+          {session?.role === "admin" && (
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <select
+                value={genderFilter}
+                onChange={(e) => setGenderFilter(e.target.value as "semua" | "putra" | "putri")}
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="semua">Semua (Putra & Putri)</option>
+                <option value="putra">Santri (Putra)</option>
+                <option value="putri">Santriwati (Putri)</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -86,14 +104,23 @@ function ButuhPembinaanPage() {
                 <tbody>
                   {pembinaanList.map((item, index) => {
                     const followUp = item.followUp;
-                    const status = followUp?.selesai ? "Selesai" : (followUp?.catatan === "Proses" ? "Proses" : "Belum");
+                    const status = followUp?.selesai
+                      ? "Selesai"
+                      : followUp?.catatan === "Proses"
+                        ? "Proses"
+                        : "Belum";
 
                     return (
-                      <tr key={item.id} className="border-t border-border hover:bg-secondary/20 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-muted-foreground">{index + 1}</td>
+                      <tr
+                        key={item.id}
+                        className="border-t border-border hover:bg-secondary/20 transition-colors"
+                      >
+                        <td className="px-4 py-3 font-semibold text-muted-foreground">
+                          {index + 1}
+                        </td>
                         <td className="px-3 py-3 font-medium">
-                          <Link 
-                            to="/rekap" 
+                          <Link
+                            to="/rekap"
                             onClick={() => setActiveSantri(item.id)}
                             className="hover:text-primary hover:underline transition-colors"
                           >
@@ -114,18 +141,26 @@ function ButuhPembinaanPage() {
                               const val = e.target.value;
                               updatePembinaanFollowUp(item.id, {
                                 catatan: val,
-                                selesai: val === "Selesai"
+                                selesai: val === "Selesai",
                               });
                             }}
                             className={`rounded-full px-3 py-1.5 text-xs font-semibold border-none outline-none cursor-pointer ${
-                              status === "Selesai" ? "bg-success/10 text-success" :
-                              status === "Proses" ? "bg-warning/10 text-warning" :
-                              "bg-danger/10 text-danger"
+                              status === "Selesai"
+                                ? "bg-success/10 text-success"
+                                : status === "Proses"
+                                  ? "bg-warning/10 text-warning"
+                                  : "bg-danger/10 text-danger"
                             }`}
                           >
-                            <option value="Belum" className="text-black bg-background">Belum</option>
-                            <option value="Proses" className="text-black bg-background">Proses</option>
-                            <option value="Selesai" className="text-black bg-background">Selesai</option>
+                            <option value="Belum" className="text-black bg-background">
+                              Belum
+                            </option>
+                            <option value="Proses" className="text-black bg-background">
+                              Proses
+                            </option>
+                            <option value="Selesai" className="text-black bg-background">
+                              Selesai
+                            </option>
                           </select>
                         </td>
                       </tr>

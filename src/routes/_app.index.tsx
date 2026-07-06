@@ -21,7 +21,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filterSantriForRole, isSupervisorRole, useAuth } from "@/lib/auth-store";
+import { filterSantriForRole, getSantriLabel, isSupervisorRole, useAuth } from "@/lib/auth-store";
 import {
   getPembinaanStreak,
   hasUnreadSupervisorNote,
@@ -74,6 +74,10 @@ function dashboardGreeting(
 
   if (role === "musyrif") {
     return `Assalamualaikum ustadz ${name}, semoga harimu menyenangkan`;
+  }
+
+  if (role === "admin") {
+    return `Assalamualaikum Admin ${name}, selamat datang di dashboard pemantauan!`;
   }
 
   return `Assalamualaikum ${name}, ayo konsisten jadi lebih baik untuk setiap hari!`;
@@ -398,11 +402,16 @@ function MusyrifDashboard() {
   const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
   const today = todayString();
-  const santri = useMemo(
-    () => (session ? filterSantriForRole(session.role, allSantri) : []),
-    [allSantri, session],
-  );
-  const santriLabel = santri[0]?.gender === "putri" ? "santriwati" : "santri";
+  const [genderFilter, setGenderFilter] = useState<"semua" | "putra" | "putri">("semua");
+  const santri = useMemo(() => {
+    if (!session) return [];
+    let list = filterSantriForRole(session.role, allSantri);
+    if (session.role === "admin" && genderFilter !== "semua") {
+      list = list.filter((item) => item.gender === genderFilter);
+    }
+    return list;
+  }, [allSantri, session, genderFilter]);
+  const santriLabel = session ? getSantriLabel(session.role) : "santri";
 
   const todayScores = useMemo(
     () =>
@@ -480,6 +489,19 @@ function MusyrifDashboard() {
             Ringkasan kondisi seluruh {santriLabel} binaan hari ini.
           </p>
         </div>
+        {session?.role === "admin" && (
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <select
+              value={genderFilter}
+              onChange={(e) => setGenderFilter(e.target.value as "semua" | "putra" | "putri")}
+              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="semua">Semua (Putra & Putri)</option>
+              <option value="putra">Santri (Putra)</option>
+              <option value="putri">Santriwati (Putri)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div

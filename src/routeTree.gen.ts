@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppSetoranRouteImport } from './routes/_app.setoran'
+import { Route as AppSantriwatiRouteImport } from './routes/_app.santriwati'
 import { Route as AppSantriRouteImport } from './routes/_app.santri'
 import { Route as AppRekapRouteImport } from './routes/_app.rekap'
 import { Route as AppRankingRouteImport } from './routes/_app.ranking'
@@ -37,6 +38,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppSetoranRoute = AppSetoranRouteImport.update({
   id: '/setoran',
   path: '/setoran',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSantriwatiRoute = AppSantriwatiRouteImport.update({
+  id: '/santriwati',
+  path: '/santriwati',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSantriRoute = AppSantriRouteImport.update({
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
   '/santri': typeof AppSantriRoute
+  '/santriwati': typeof AppSantriwatiRoute
   '/setoran': typeof AppSetoranRoute
 }
 export interface FileRoutesByTo {
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/ranking': typeof AppRankingRoute
   '/rekap': typeof AppRekapRoute
   '/santri': typeof AppSantriRoute
+  '/santriwati': typeof AppSantriwatiRoute
   '/setoran': typeof AppSetoranRoute
   '/': typeof AppIndexRoute
 }
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/_app/ranking': typeof AppRankingRoute
   '/_app/rekap': typeof AppRekapRoute
   '/_app/santri': typeof AppSantriRoute
+  '/_app/santriwati': typeof AppSantriwatiRoute
   '/_app/setoran': typeof AppSetoranRoute
   '/_app/': typeof AppIndexRoute
 }
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/rekap'
     | '/santri'
+    | '/santriwati'
     | '/setoran'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/rekap'
     | '/santri'
+    | '/santriwati'
     | '/setoran'
     | '/'
   id:
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/_app/ranking'
     | '/_app/rekap'
     | '/_app/santri'
+    | '/_app/santriwati'
     | '/_app/setoran'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -175,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/setoran'
       fullPath: '/setoran'
       preLoaderRoute: typeof AppSetoranRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/santriwati': {
+      id: '/_app/santriwati'
+      path: '/santriwati'
+      fullPath: '/santriwati'
+      preLoaderRoute: typeof AppSantriwatiRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/santri': {
@@ -229,6 +248,7 @@ interface AppRouteChildren {
   AppRankingRoute: typeof AppRankingRoute
   AppRekapRoute: typeof AppRekapRoute
   AppSantriRoute: typeof AppSantriRoute
+  AppSantriwatiRoute: typeof AppSantriwatiRoute
   AppSetoranRoute: typeof AppSetoranRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -240,6 +260,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRankingRoute: AppRankingRoute,
   AppRekapRoute: AppRekapRoute,
   AppSantriRoute: AppSantriRoute,
+  AppSantriwatiRoute: AppSantriwatiRoute,
   AppSetoranRoute: AppSetoranRoute,
   AppIndexRoute: AppIndexRoute,
 }

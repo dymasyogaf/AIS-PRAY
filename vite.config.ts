@@ -10,16 +10,16 @@ export default defineConfig({
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     cloudflare({
-      viteEnvironment: { name: "ssr" }
+      viteEnvironment: { name: "ssr" },
     }),
     tanstackStart({
-      server: { entry: "server" }
+      server: { entry: "server" },
     }),
     viteReact(),
   ],
   resolve: {
     alias: {
-      "@": "/src"
-    }
-  }
+      "@": "/src",
+    },
+  },
 });

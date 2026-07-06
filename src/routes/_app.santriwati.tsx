@@ -5,12 +5,12 @@ import { RoleGuard } from "@/components/RoleGuard";
 import { filterSantriForRole, getSantriLabel, useAuth } from "@/lib/auth-store";
 import { lastNDates, scoreEntry, setActiveSantri, statusOf, useStore } from "@/lib/ibadah-store";
 
-export const Route = createFileRoute("/_app/santri")({
-  component: SantriPage,
-  head: () => ({ meta: [{ title: "Daftar Santri - Rekap Santri" }] }),
+export const Route = createFileRoute("/_app/santriwati")({
+  component: SantriwatiPage,
+  head: () => ({ meta: [{ title: "Daftar Santriwati - Rekap Santri" }] }),
 });
 
-function SantriPage() {
+function SantriwatiPage() {
   const { session } = useAuth();
   const allSantri = useStore((store) => store.santri);
   const entries = useStore((store) => store.entries);
@@ -19,16 +19,16 @@ function SantriPage() {
   const santri = useMemo(() => {
     if (!session) return [];
     const list = filterSantriForRole(session.role, allSantri);
-    return list.filter((item) => item.gender === "putra");
+    return list.filter((item) => item.gender === "putri");
   }, [allSantri, session]);
 
   return (
-    <RoleGuard allowedRoles={["admin", "musyrif"]}>
+    <RoleGuard allowedRoles={["admin", "musyrifah"]}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daftar Santri</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Daftar Santriwati</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pilih santri untuk melihat ringkasan dan rekap ibadahnya.
+            Pilih santriwati untuk melihat ringkasan dan rekap ibadahnya.
           </p>
         </div>
 

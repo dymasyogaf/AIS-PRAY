@@ -15,22 +15,22 @@ export const Route = createFileRoute("/_app/profil")({
 function ProfilPage() {
   const { session } = useAuth();
   const allSantri = useStore((store) => store.santri);
-  
-  // Protect page only for student roles
-  if (!session || !["santri", "santriwati"].includes(session.role)) {
-    return <Navigate to="/" />;
-  }
 
-  const activeSantri = allSantri.find((s) => s.id === session.santriId);
+  const activeSantri = allSantri.find((s) => s.id === session?.santriId);
 
-  const [username, setUsername] = useState(session.username);
+  const [username, setUsername] = useState(session?.username || "");
   const [password, setPassword] = useState("");
   const [asrama, setAsrama] = useState(activeSantri?.asrama || "");
   const [kelas, setKelas] = useState(activeSantri?.kelas || "X");
   const [jurusan, setJurusan] = useState(activeSantri?.jurusan || "");
-  
+
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Protect page only for student roles
+  if (!session || !["santri", "santriwati"].includes(session.role)) {
+    return <Navigate to="/" />;
+  }
 
   const kelasOptions = ["X", "XI", "XII"];
 
@@ -75,7 +75,10 @@ function ProfilPage() {
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 space-y-6">
+      <form
+        onSubmit={onSubmit}
+        className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 space-y-6"
+      >
         {error ? (
           <div className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
@@ -84,7 +87,7 @@ function ProfilPage() {
 
         <div className="space-y-4">
           <h2 className="text-lg font-semibold border-b border-border pb-2">Informasi Akun</h2>
-          
+
           <label className="block">
             <span className="text-sm font-medium">Username</span>
             <input

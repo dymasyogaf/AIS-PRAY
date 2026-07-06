@@ -39,7 +39,7 @@ const nav = [
     label: "Dashboard",
     mobileLabel: "Dash",
     icon: LayoutDashboard,
-    roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
+    roles: ["admin", "musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
   },
   {
     to: "/input",
@@ -53,7 +53,7 @@ const nav = [
     label: "Rekap",
     mobileLabel: "Rekap",
     icon: BarChart3,
-    roles: ["musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
+    roles: ["admin", "musyrif", "musyrifah", "santri", "santriwati"] as UserRole[],
   },
   {
     to: "/profil",
@@ -67,28 +67,35 @@ const nav = [
     label: "Data Setoran",
     mobileLabel: "Setoran",
     icon: BookOpen,
-    roles: ["musyrif", "musyrifah"] as UserRole[],
+    roles: ["admin", "musyrif", "musyrifah"] as UserRole[],
   },
   {
     to: "/ranking",
     label: "Ranking",
     mobileLabel: "Rank",
     icon: Trophy,
-    roles: ["musyrif", "musyrifah"] as UserRole[],
+    roles: ["admin", "musyrif", "musyrifah"] as UserRole[],
   },
   {
     to: "/santri",
-    label: "Daftar Santri",
+    label: "Santri",
     mobileLabel: "Santri",
     icon: Users,
-    roles: ["musyrif", "musyrifah"] as UserRole[],
+    roles: ["admin", "musyrif"] as UserRole[],
+  },
+  {
+    to: "/santriwati",
+    label: "Santriwati",
+    mobileLabel: "Santriwati",
+    icon: Users,
+    roles: ["admin", "musyrifah"] as UserRole[],
   },
   {
     to: "/butuh-pembinaan",
     label: "Butuh Pembinaan",
     mobileLabel: "Bina",
     icon: Flame,
-    roles: ["musyrif", "musyrifah"] as UserRole[],
+    roles: ["admin", "musyrif", "musyrifah"] as UserRole[],
   },
 ];
 
@@ -128,7 +135,9 @@ export function AppShell() {
         <nav className="space-y-1 p-3">
           {visibleNav.map((item) => {
             const isActive =
-              item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
+              item.to === "/"
+                ? location.pathname === "/"
+                : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             const Icon = item.icon;
 
             return (
@@ -247,7 +256,9 @@ export function AppShell() {
         >
           {visibleNav.map((item) => {
             const isActive =
-              item.to === "/" ? location.pathname === "/" : location.pathname.startsWith(item.to);
+              item.to === "/"
+                ? location.pathname === "/"
+                : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             const Icon = item.icon;
 
             return (
